@@ -1,0 +1,16 @@
+# Shared environment — Python 3.10+
+# Cả 3 người dùng chung 1 file này. Test: python -c "import torch, mediapipe, xgboost, faiss, dtaidistance"
+
+numpy>=1.24
+pandas>=2.0
+scipy>=1.11
+scikit-learn>=1.3
+matplotlib>=3.7
+opencv-python>=4.8
+mediapipe>=0.10
+torch>=2.1
+xgboost>=2.0
+faiss-cpu>=1.7
+dtaidistance>=2.3
+tqdm>=4.66
+pyyaml>=6.0

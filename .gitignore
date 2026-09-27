@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+.env
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Model checkpoints & embeddings
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.onnx
+*.joblib
+*.pkl
+
+# Media & extracted poses (lưu local / Drive, không đẩy Git)
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+*.wav
+*.mp3
+*.npy
+*.npz
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.idea/
+.vscode/
+*.swp
