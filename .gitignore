@@ -33,6 +33,9 @@ venv/
 *.npy
 *.npz
 
+# Feature CSV trung gian (regenerate local, không đẩy Git)
+annotations/demo_features/
+
 # OS
 .DS_Store
 Thumbs.db
