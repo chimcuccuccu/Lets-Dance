@@ -35,6 +35,7 @@ venv/
 
 # Feature CSV trung gian (regenerate local, không đẩy Git)
 annotations/demo_features/
+annotations/demo_source/
 
 # OS
 .DS_Store
