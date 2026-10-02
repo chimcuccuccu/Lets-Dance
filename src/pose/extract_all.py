@@ -1,62 +1,80 @@
-"""Person 1 — Chạy thử trên toàn bộ video reference + performer đã quay → lưu .npy cho từng file."""
-import os
+"""Person 1 — batch extract pose cho mọi video reference + performer."""
+from __future__ import annotations
+
 import glob
-import numpy as np
 import logging
+import os
+from pathlib import Path
+
+import numpy as np
+
 from src.pose.pose_extractor import extract_pose
 
-# Cấu hình logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-def process_all_videos(data_dir: str, output_dir: str):
+
+def _resolve_output_path(video_path: str, data_dir: str, output_dir: str) -> str:
     """
-    Quét toàn bộ video trong data_dir và trích xuất pose lưu vào output_dir.
+    Map video → poses/{dance_id}/{video_id}.npy theo docs/data_format.md.
+
+    Ví dụ:
+      data/dances/dance_001/reference/ref.mp4  → poses/dance_001/ref.npy
+      data/dances/dance_001/performers/p01.mp4 → poses/dance_001/p01.npy
     """
-    video_extensions = ('*.mp4', '*.avi', '*.mov')
+    rel = Path(os.path.relpath(video_path, data_dir))
+    parts = rel.parts
+    # Kỳ vọng: dance_xxx / (reference|performers) / file.ext  hoặc dance_xxx / file.ext
+    dance_id = parts[0] if parts else "unknown"
+    video_id = Path(parts[-1]).stem
+    dance_dir = os.path.join(output_dir, dance_id)
+    os.makedirs(dance_dir, exist_ok=True)
+    return os.path.join(dance_dir, f"{video_id}.npy")
+
+
+def process_all_videos(
+    data_dir: str,
+    output_dir: str,
+    *,
+    skip_existing: bool = True,
+    model_complexity: int = 2,
+) -> None:
+    """Quét video trong data_dir và lưu pose .npy theo cấu trúc dance_id/video_id."""
+    video_extensions = ("*.mp4", "*.avi", "*.mov", "*.mkv")
     video_paths = []
     for ext in video_extensions:
-        # Lấy tất cả video trong cấu trúc data/dances/dance_xxx/
-        search_pattern = os.path.join(data_dir, '**', ext)
-        video_paths.extend(glob.glob(search_pattern, recursive=True))
-        
+        video_paths.extend(glob.glob(os.path.join(data_dir, "**", ext), recursive=True))
+
     if not video_paths:
-        logger.warning(f"Không tìm thấy video nào trong {data_dir}")
+        logger.warning("Không tìm thấy video nào trong %s", data_dir)
         return
-        
-    logger.info(f"Tìm thấy {len(video_paths)} videos. Bắt đầu trích xuất...")
-    
+
+    logger.info("Tìm thấy %d videos. Bắt đầu trích xuất...", len(video_paths))
     os.makedirs(output_dir, exist_ok=True)
-    
-    for video_path in video_paths:
+
+    ok, skipped, failed = 0, 0, 0
+    for video_path in sorted(video_paths):
         try:
-            # Tạo đường dẫn lưu file tương ứng
-            # Ví dụ: data/dances/dance_001/reference/vid.mp4 
-            # -> poses/dance_001_reference_vid.npy
-            rel_path = os.path.relpath(video_path, data_dir)
-            safe_name = rel_path.replace(os.sep, '_').rsplit('.', 1)[0] + '.npy'
-            output_path = os.path.join(output_dir, safe_name)
-            
-            if os.path.exists(output_path):
-                logger.info(f"Bỏ qua {video_path} vì đã tồn tại file pose.")
+            output_path = _resolve_output_path(video_path, data_dir, output_dir)
+            if skip_existing and os.path.exists(output_path):
+                logger.info("Bỏ qua (đã có): %s", output_path)
+                skipped += 1
                 continue
-                
-            poses = extract_pose(video_path)
+
+            poses = extract_pose(video_path, model_complexity=model_complexity)
             np.save(output_path, poses)
-            logger.info(f"Lưu thành công pose cho {video_path} tại {output_path}")
+            logger.info("Lưu %s → %s %s", video_path, output_path, poses.shape)
+            ok += 1
         except Exception as e:
-            logger.error(f"Lỗi khi xử lý {video_path}: {e}")
+            failed += 1
+            logger.error("Lỗi khi xử lý %s: %s", video_path, e)
+
+    logger.info("Xong. ok=%d skipped=%d failed=%d", ok, skipped, failed)
+
 
 if __name__ == "__main__":
-    # Đảm bảo import PYTHONPATH đúng nếu chạy từ ngoài gốc
-    # python -m src.pose.extract_all
-    
-    # Path tương đối dựa vào gốc repo
-    # data_dir = data/dances, output_dir = poses
-    
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     DATA_DIR = os.path.join(BASE_DIR, "data", "dances")
     OUTPUT_DIR = os.path.join(BASE_DIR, "poses")
-    
     process_all_videos(DATA_DIR, OUTPUT_DIR)
     logger.info("Hoàn tất batch processing!")

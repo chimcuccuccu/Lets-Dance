@@ -10,6 +10,10 @@ Ghi nhớ: làm sai format ở đây thì tuần sau 3 nhánh không ghép đư�
 ## Diff sequence (Person 1)
 
 - Shape: `T × 33 × 3` — `performer − reference` sau khi align
+- Pipeline chuẩn: confidence filter → interp → center hip → **mean spine scale** → Savitzky–Golay → DTW warp (path từ Person 2) → subtract → optional resample `T=150`
+- File gợi ý: `poses/diffs/{dance_id}/{video_id}_diff.npy` (và bản flat `{dance_id}_{video_id}_diff.npy`)
+- DTW path (nếu có): `annotations/dtw_paths/{dance_id}/{video_id}_path.npy` shape `(L, 2)` — cột 0 = index performer, cột 1 = index reference
+- Khi chưa có DTW path: fallback resample cả hai về cùng `T` rồi trừ (chỉ dùng tạm; Spatial DL chính thức ưu tiên path từ P2)
 
 ## DTW (Person 2)
 

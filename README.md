@@ -47,6 +47,8 @@ python -c "import torch, mediapipe, xgboost, faiss, dtaidistance"
 
 Python **3.10+**. Import không lỗi trên máy mỗi người thì mới tách nhánh.
 
+**Chạy pipeline / lệnh cụ thể:** xem [`HUONG-DAN-CHAY.md`](HUONG-DAN-CHAY.md).
+
 ## Cây thư mục
 
 | Folder | Dùng để làm gì |

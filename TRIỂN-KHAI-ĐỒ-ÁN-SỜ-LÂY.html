@@ -1,0 +1,272 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}</style><style>:root{color-scheme:light dark;--md-bg:#fff;--md-text:rgba(0,0,0,.8);--md-muted:rgba(0,0,0,.6);--md-fill:rgba(0,0,0,.04);--md-fill-strong:rgba(0,0,0,.06);--md-rule:rgba(0,0,0,.1);--md-rule-strong:rgba(0,0,0,.16);--md-link:hsl(210 100% 45%)}@media (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){--md-bg:#0d0d0d;--md-text:rgba(255,255,255,.85);--md-muted:rgba(255,255,255,.6);--md-fill:rgba(255,255,255,.06);--md-fill-strong:rgba(255,255,255,.09);--md-rule:rgba(255,255,255,.14);--md-rule-strong:rgba(255,255,255,.22);--md-link:hsl(210 100% 72%)}}:root[data-theme="dark"]{color-scheme:dark;--md-bg:#0d0d0d;--md-text:rgba(255,255,255,.85);--md-muted:rgba(255,255,255,.6);--md-fill:rgba(255,255,255,.06);--md-fill-strong:rgba(255,255,255,.09);--md-rule:rgba(255,255,255,.14);--md-rule-strong:rgba(255,255,255,.22);--md-link:hsl(210 100% 72%)}:root[data-theme="light"]{color-scheme:light}@media print{:root,:root[data-theme="dark"]{color-scheme:light;--md-bg:#fff;--md-text:rgba(0,0,0,.8);--md-muted:rgba(0,0,0,.6);--md-fill:rgba(0,0,0,.04);--md-fill-strong:rgba(0,0,0,.06);--md-rule:rgba(0,0,0,.1);--md-rule-strong:rgba(0,0,0,.16);--md-link:hsl(210 100% 45%)}}body{background:var(--md-bg);color:var(--md-text);max-width:720px;margin:0 auto;padding:32px;display:flex;flex-direction:column;gap:10px;font:14px/1.55 -apple-system,BlinkMacSystemFont,'SF Pro','Segoe UI',sans-serif;overflow-wrap:break-word}body>:first-child{margin-top:0}h1,h2,h3,h4,h5,h6{margin:6px 0 0;line-height:1.25;font-weight:600;text-wrap:balance}h1{font-size:1.35em}h2{font-size:1.15em;color:var(--md-muted)}h3,h4,h5,h6{font-size:1em}p,ul,ol,blockquote,table,pre,hr{margin:0}strong{font-weight:600}a{color:var(--md-link);text-decoration:none}a:hover{text-decoration:underline}ul,ol{display:flex;flex-direction:column;gap:6px;padding-left:22px}ul{list-style:disc}ol{list-style:decimal}:is(li,td,th)>*+:is(p,ul,ol,blockquote){margin-top:6px}blockquote{display:flex;flex-direction:column;gap:10px;border-left:2px solid var(--md-rule);padding-left:10px;color:var(--md-muted)}:not(pre)>code{background:var(--md-fill);padding:1px 3px;border-radius:4px;font:.92em 'SF Mono',ui-monospace,Menlo,Consolas,monospace}a>code{background:none;color:inherit}pre{background:var(--md-fill);padding:10px 12px;border-radius:6px;overflow-x:auto;font:12px/1.5 'SF Mono',ui-monospace,Menlo,Consolas,monospace;margin-block:4px}pre code{background:none;padding:0;font:inherit}table{width:100%;border-collapse:separate;border-spacing:2px;font:inherit}th,td{padding:6px 8px;border-radius:3px;text-align:left;vertical-align:top}th{background:var(--md-fill-strong);font-weight:600}td{background:var(--md-fill)}:is(th,td) :not(pre)>code{background:transparent}hr{border:0;border-top:1px solid var(--md-rule-strong);margin-block:10px}img{max-width:100%;height:auto;border-radius:4px}</style>
+</head><body>
+<h1>TÀI LIỆU TRIỂN KHAI — Bắt đầu ngay (Multi-dance, 3 người, 8 tuần)</h1>
+<blockquote>
+<p>Đây là bản tổng hợp cuối cùng, gộp toàn bộ kiến trúc đã thống nhất (multi-dance, diff_sequence, DTW-gợi-ý, 3 nhánh DL → Fusion → XGBoost → FAISS/LLM) thành <strong>việc làm cụ thể từng người, từng tuần</strong>. Dùng file này làm checklist chính khi triển khai.</p>
+</blockquote>
+<hr>
+<h2>0. Nhắc nhanh kiến trúc (đọc 1 lần rồi bắt tay vào việc)</h2>
+<pre><code>performer_video + dance_id
+        ↓
+load reference_pose[dance_id]
+        ↓
+MediaPipe → preprocessing → diff_sequence = performer − reference (đã align)
+        ↓
+┌───────────┬───────────┬───────────┐
+│ Spatial DL│ Temporal  │ Error DL  │  ← 3 người, chạy song song, dùng chung cho mọi bài
+│ (Person1) │ DL(Pers.2)│ (Person3) │
+└───────────┴───────────┴───────────┘
+        ↓
+   Feature Fusion → XGBoost → Score 0-300
+        ↓
+   FAISS (lọc theo dance_id) + LLM feedback
+</code></pre>
+<p><strong>Nguyên tắc bất di bất dịch (nhắc lại):</strong> XGBoost/DTW/Rule engine KHÔNG phải DL. Mỗi người bắt buộc có 1 model neural network riêng, tự train, tự eval. Không train xong DL thì không có gì để nộp là &quot;DL&quot; cả.</p>
+<hr>
+<h2>1. VIỆC CHUNG — làm trước khi 3 người tách ra (Tuần 1, ~5-7 ngày)</h2>
+<p>Đây là việc <strong>cả nhóm cùng ngồi lại</strong>, không ai được bỏ qua vì mọi người đều cần các quyết định này để bắt đầu phần riêng.</p>
+<h3>Checklist tuần 1 (theo thứ tự)</h3>
+<ul>
+<li><input disabled="" type="checkbox"> <strong>Ngày 1:</strong> Chọn 2–3 bài nhảy (30–60s/bài), nhạc royalty-free/không lời. Ưu tiên: 1 bài dễ/chậm, 1 bài khó/nhanh hơn — để chứng minh tổng quát hoá.</li>
+<li><input disabled="" type="checkbox"> <strong>Ngày 1:</strong> Tạo repo Git theo cấu trúc:</li>
+</ul>
+<pre><code>movement-assessment/
+├── data/dances/{dance_001,dance_002,dance_003}/
+├── src/{pose,preprocessing,spatial_dl,temporal_dl,error_dl,features,scoring,retrieval,feedback}/
+├── annotations/
+├── experiments/
+├── configs/
+└── requirements.txt
+</code></pre>
+<ul>
+<li><input disabled="" type="checkbox"> <strong>Ngày 2:</strong> Cài môi trường chung — Python 3.10+, PyTorch, MediaPipe, XGBoost, FAISS, dtaidistance (hoặc fastdtw). Cả 3 người dùng chung 1 file <code>requirements.txt</code>, test import không lỗi trên máy mỗi người.</li>
+<li><input disabled="" type="checkbox"> <strong>Ngày 2-3:</strong> Quay video reference cho từng bài (người nhảy chuẩn nhất nhóm/nhờ người ngoài).</li>
+<li><input disabled="" type="checkbox"> <strong>Ngày 3-4:</strong> Person 3 chủ trì soạn <strong>taxonomy lỗi</strong> (bản nháp): <code>off_beat</code>, <code>wrong_move</code>, <code>low_amplitude</code>, <code>wrong_direction</code>, <code>missed_move</code> — mỗi lỗi có định nghĩa rõ + ví dụ. Cả nhóm review.</li>
+<li><input disabled="" type="checkbox"> <strong>Ngày 4-5:</strong> Thống nhất <strong>format dữ liệu trung gian</strong> giữa 3 người (rất quan trọng, làm sai ở đây thì tuần sau cãi nhau):
+<ul>
+<li><code>pose.npy</code> shape: <code>T × 33 × 4</code> (x, y, z, visibility)</li>
+<li><code>diff_sequence</code> shape: <code>T × 33 × 3</code> (sau khi Person 1 tính)</li>
+<li><code>dtw_distance(t)</code>: 1 giá trị float mỗi đoạn 2-3s (Person 2 xuất ra)</li>
+<li>File nhãn: <code>annotations/scores.csv</code> (dance_id, video_id, khop_dong_tac, khop_nhip, nang_luong, tong_diem) và <code>annotations/error_labels.csv</code> (dance_id, video_id, start_time, end_time, error_type, severity)</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox"> <strong>Ngày 5-7:</strong> Tổ chức quay 8–12 performer/bài (tổng ~25-30 người trải đều các bài). Ưu tiên đa dạng trình độ (mới học/sơ/thành thạo).</li>
+</ul>
+<p><strong>Kết thúc tuần 1 phải có:</strong> repo chạy được, 2-3 video reference, danh sách lịch quay performer, taxonomy lỗi bản nháp, format dữ liệu đã thống nhất bằng văn bản (ghi vào <code>docs/data_format.md</code>).</p>
+<hr>
+<h2>2. PERSON 1 — Spatial DL (học hình dạng/tư thế lệch so với reference)</h2>
+<h3>Việc phải làm, theo thứ tự, có deliverable rõ ràng</h3>
+<p><strong>Tuần 2:</strong></p>
+<ol>
+<li>Viết <code>src/pose/mediapipe.py</code> — hàm <code>extract_pose(video_path) -&gt; np.array(T,33,4)</code>.</li>
+<li>Chạy thử trên toàn bộ video reference + performer đã quay → lưu <code>.npy</code> cho từng file.</li>
+<li>Xử lý edge case: video thiếu người, occlusion nhiều, chuyển động nhanh làm mất landmark (interpolate hoặc giữ giá trị frame trước khi confidence thấp).</li>
+<li><strong>Deliverable:</strong> <code>poses/</code> chứa toàn bộ pose <code>.npy</code> cho mọi video của mọi bài.</li>
+</ol>
+<p><strong>Tuần 3:</strong></p>
+<ol>
+<li>Viết <code>src/preprocessing/preprocess.py</code>: center theo hip, scale theo chiều cao, smoothing (Savitzky-Golay hoặc moving average), chuẩn hoá độ dài sequence.</li>
+<li>Viết hàm <strong>time-alignment thô</strong> giữa performer và reference (dùng DTW path ở mức toàn bài — phối hợp chặt với Person 2 vì DTW là việc của Person 2, Person 1 chỉ dùng kết quả align để cắt/khớp 2 chuỗi).</li>
+<li>Viết <code>compute_diff(performer_pose, reference_pose) -&gt; diff_sequence</code>.</li>
+<li><strong>Deliverable:</strong> hàm <code>diff_sequence</code> chạy được, kiểm tra bằng mắt (plot vài chiều) xem có hợp lý không (performer khớp tốt → diff nhỏ, performer lệch nhiều → diff lớn).</li>
+</ol>
+<p><strong>Tuần 3-4 (xen kẽ, KHÔNG BẮT BUỘC — làm nếu kịp tiến độ, xem ghi chú cuối mục):</strong></p>
+<ol>
+<li>Tải <strong>AIST++</strong> (dataset công khai, pose 3D định dạng SMPL, ~991 chuỗi dance).</li>
+<li>Viết hàm convert SMPL joints → tập landmark tương ứng với format MediaPipe (33 điểm) — chọn ra các joint chung giữa 2 định dạng, bỏ qua joint không khớp được. Đây là bước tốn thời gian nhất, nên bắt đầu sớm nếu làm.</li>
+<li>Pretrain Spatial model trên AIST++ bằng proxy task (vì AIST++ không có nhãn lỗi/điểm số): autoencoder tái tạo lại pose, hoặc phân loại thể loại dance (nếu dataset có nhãn genre) — mục tiêu chỉ để model học được &quot;không gian biểu diễn chuyển động&quot; tốt trước.</li>
+<li>Lưu checkpoint pretrain (<code>checkpoints/spatial_pretrained.pt</code>), dùng làm điểm khởi đầu (thay vì random init) khi train ở Tuần 4-5 bên dưới.</li>
+<li><strong>Deliverable (nếu làm):</strong> checkpoint pretrain + ghi chú ngắn so sánh định tính (loss hội tụ nhanh hơn khi fine-tune từ checkpoint này vs train from scratch).</li>
+</ol>
+<blockquote>
+<p><strong>Ghi chú quan trọng:</strong> bước này KHÔNG bắt buộc để pipeline chạy được — chỉ giúp tăng chất lượng (giảm overfit vì dataset tự quay nhỏ). Nếu đến giữa Tuần 3 các việc bắt buộc khác (preprocessing, quay performer) chưa xong, <strong>bỏ qua bước này trước</strong>, ưu tiên có pipeline chạy end-to-end. Quay lại làm sau nếu Tuần 5 còn dư thời gian — lúc đó có thể báo cáo thêm 1 bảng ablation &quot;có pretrain AIST++ vs không&quot;, là điểm cộng cho báo cáo.</p>
+</blockquote>
+<p><strong>Tuần 4:</strong></p>
+<ol>
+<li>Dataset loader: đọc <code>diff_sequence</code> + nhãn <code>tong_diem</code> (dùng tạm để sanity-check, không phải target chính của Spatial model).</li>
+<li>Model V3 bản đầu tiên: <strong>bắt đầu bằng MLP hoặc 1D-CNN nhỏ</strong> trên <code>diff_sequence</code> đã pooling theo thời gian (chưa cần Transformer/GNN). Nếu đã có checkpoint pretrain ở trên, load checkpoint đó làm điểm khởi đầu thay vì random init.</li>
+<li>Training loop cơ bản (train/val split theo <code>person_id</code>, không theo <code>dance_id</code> ngẫu nhiên — nhớ 1 người có thể xuất hiện ở nhiều bài).</li>
+<li><strong>Deliverable:</strong> model train được vài epoch, loss giảm, có checkpoint.</li>
+</ol>
+<p><strong>Tuần 5:</strong></p>
+<ol>
+<li>Debug overfitting (nếu có): thêm augmentation nhẹ (jitter, mirror trái-phải), giảm model size nếu cần.</li>
+<li>Xuất <code>spatial_embedding</code> cho toàn bộ dataset, visualize bằng PCA/t-SNE — kiểm tra: các video có <code>tong_diem</code> cao có gom cụm khác với điểm thấp không? (sanity check định tính).</li>
+<li>Viết ablation nhỏ: Spatial DL embedding vs raw geometry feature — so sánh khi đưa qua 1 XGBoost tạm thời, xem embedding có thêm giá trị gì không.</li>
+<li><strong>Deliverable:</strong> bảng kết quả sơ bộ (không cần hoàn hảo), API <code>spatial_model(diff_sequence) -&gt; embedding</code> sẵn sàng cho fusion.</li>
+</ol>
+<p><strong>Tuần 6-8:</strong> tham gia fusion, ablation chính thức (mục 5 bên dưới), hỗ trợ review chung.</p>
+<h3>File code Person 1 phụ trách</h3>
+<pre><code>src/pose/mediapipe.py
+src/preprocessing/preprocess.py   (phối hợp Person 2 phần alignment)
+src/spatial_dl/model_v3.py
+src/spatial_dl/train.py
+src/spatial_dl/dataset.py
+</code></pre>
+<hr>
+<h2>3. PERSON 2 — Temporal DL + DTW (học nhịp/timing lệch so với reference)</h2>
+<h3>Việc phải làm, theo thứ tự</h3>
+<p><strong>Tuần 2:</strong></p>
+<ol>
+<li>Khảo sát geometry feature: viết hàm tính góc khớp (gối, khuỷu tay, vai...) từ pose <code>.npy</code> theo từng frame.</li>
+<li>Quan sát trực quan (plot) độ trễ/sớm nhịp giữa vài cặp performer-reference để hiểu dữ liệu.</li>
+<li><strong>Deliverable:</strong> notebook khảo sát, hàm <code>compute_geometry_features(pose) -&gt; features(T, k)</code>.</li>
+</ol>
+<p><strong>Tuần 3 (việc trọng tâm của cả project, không phải phụ):</strong></p>
+<ol>
+<li>Viết <code>src/features/dtw.py</code>:
+<ul>
+<li><code>dtw_align(performer_features, reference_features) -&gt; alignment_path</code> (dùng cho Person 1 làm time-alignment thô).</li>
+<li><code>dtw_distance_windowed(performer, reference, window=2-3s) -&gt; [distance_per_segment]</code> (dùng cho Person 3 làm gợi ý gán nhãn).</li>
+<li><code>dtw_distance_total(performer, reference) -&gt; float</code> (feature tổng cho fusion).</li>
+</ul>
+</li>
+<li>Rule engine đơn giản: threshold trên <code>dtw_distance_windowed</code> → cờ &quot;nghi ngờ lệch nhịp&quot; (baseline, không phải DL).</li>
+<li>Chạy DTW cho <strong>toàn bộ performer × đúng reference của bài tương ứng</strong> (nhớ theo <code>dance_id</code>, không so nhầm bài).</li>
+<li><strong>Deliverable:</strong> file <code>dtw_features.csv</code> (dance_id, video_id, dtw_distance_total, dtw_distance_per_segment...), bàn giao cho Person 1 (alignment) và Person 3 (gợi ý gán nhãn) ngay khi xong.</li>
+</ol>
+<p><strong>Tuần 3-4 (xen kẽ, KHÔNG BẮT BUỘC — làm nếu kịp tiến độ, cùng ghi chú như Person 1):</strong></p>
+<ol>
+<li>Dùng lại pose AIST++ đã convert format (Person 1 đã làm ở bước tương ứng — phối hợp để không convert 2 lần).</li>
+<li>Tính geometry feature (góc khớp) trên chuỗi AIST++ giống hệt hàm <code>compute_geometry_features</code> đã viết cho dữ liệu tự quay.</li>
+<li>Pretrain Temporal model (BiLSTM/GRU) trên AIST++ bằng proxy task: next-frame prediction (dự đoán khung hình tiếp theo trong chuỗi) hoặc phân loại thể loại dance.</li>
+<li>Lưu checkpoint (<code>checkpoints/temporal_pretrained.pt</code>), dùng làm điểm khởi đầu khi train ở Tuần 4-5 bên dưới.</li>
+<li><strong>Deliverable (nếu làm):</strong> checkpoint pretrain.</li>
+</ol>
+<blockquote>
+<p>Cùng điều kiện như Person 1: bỏ qua trước nếu việc bắt buộc (DTW, dataset tự quay) chưa xong, làm bù sau nếu còn dư thời gian.</p>
+</blockquote>
+<p><strong>Tuần 4:</strong></p>
+<ol>
+<li>Dataset loader cho sequence: <code>(performer_geometry_seq, reference_geometry_seq, dtw_distance_seq)</code>.</li>
+<li>Temporal model đầu tiên: <strong>1-layer BiLSTM/GRU nhỏ</strong> — input là chuỗi ghép giữa geometry performer, geometry reference (hoặc diff), và dtw_distance theo thời gian. Nếu đã có checkpoint pretrain, load làm điểm khởi đầu thay vì random init.</li>
+<li><strong>Deliverable:</strong> model train chạy được, loss giảm.</li>
+</ol>
+<p><strong>Tuần 5:</strong></p>
+<ol>
+<li>So sánh 3 kịch bản bắt buộc: <strong>(a) DTW-only</strong> (chỉ dùng dtw_distance làm feature, không DL) <strong>(b) LSTM-only</strong> (bỏ dtw_distance, chỉ dùng raw sequence) <strong>(c) DTW+LSTM</strong> (kết hợp) — đưa cả 3 qua 1 XGBoost tạm để so MAE/RMSE, xem DL có học thêm được gì ngoài thông tin DTW đã có không.</li>
+<li>Tính tương quan (Pearson/Spearman) giữa <code>temporal_embedding</code> (hoặc dtw score) với điểm &quot;khớp nhịp&quot; mà expert đã chấm riêng (dùng đúng cột <code>khop_nhip</code> trong form chấm điểm).</li>
+<li><strong>Deliverable:</strong> bảng so sánh 3 kịch bản, API <code>temporal_model(seq) -&gt; embedding, dtw_features</code>.</li>
+</ol>
+<p><strong>Tuần 6-8:</strong> tham gia fusion, ablation, hỗ trợ FAISS.</p>
+<h3>File code Person 2 phụ trách</h3>
+<pre><code>src/features/geometry.py
+src/features/dtw.py
+src/temporal_dl/lstm.py
+src/temporal_dl/train.py
+src/temporal_dl/dataset.py
+</code></pre>
+<hr>
+<h2>4. PERSON 3 — Error DL (phát hiện loại lỗi theo từng đoạn thời gian)</h2>
+<h3>Việc phải làm, theo thứ tự</h3>
+<p><strong>Tuần 1-2:</strong></p>
+<ol>
+<li>Hoàn thiện taxonomy lỗi chính thức (đã có bản nháp từ tuần 1 chung) — viết định nghĩa + ví dụ rõ cho từng loại, đảm bảo <strong>tổng quát được cho cả 2-3 bài</strong> (không định nghĩa lỗi dựa trên động tác cụ thể của 1 bài).</li>
+<li>Thiết kế <strong>form chấm điểm 0-300</strong> (3 tiêu chí con: khớp động tác, khớp nhịp, năng lượng) — gửi cho người chấm (biết nhảy/dạy nhảy) sử dụng.</li>
+<li><strong>Deliverable:</strong> <code>docs/error_taxonomy.md</code>, <code>docs/scoring_protocol.md</code>, form chấm điểm sẵn sàng gửi đi.</li>
+</ol>
+<p><strong>Tuần 3 (việc trọng tâm, phối hợp chặt với Person 2):</strong></p>
+<ol>
+<li>Nhận <code>dtw_distance_windowed</code> từ Person 2 → tạo bảng gợi ý: đoạn nào có <code>dtw_distance</code> cao → cờ &quot;⚠️ nghi ngờ có lỗi&quot;.</li>
+<li>Gán nhãn thật: chỉ cần tập trung xem kỹ các đoạn có cờ ⚠️, xác nhận và <strong>phân loại cụ thể loại lỗi nào</strong> (DTW chỉ báo &quot;khác thường&quot;, không biết là lỗi gì — con người phải quyết định).</li>
+<li>Thu thập kết quả chấm điểm 0-300 từ người chấm (song song, không phụ thuộc bước gán nhãn lỗi).</li>
+<li><strong>Sanity check bắt buộc cuối tuần 3:</strong> vẽ scatter plot (số lỗi/độ nặng trên trục X, điểm 0-300 trên trục Y) — kiểm tra tương quan hợp lý (nhiều lỗi → điểm thấp) trước khi bắt đầu train DL. Nếu không hợp lý, quay lại rà soát taxonomy hoặc quy trình chấm.</li>
+<li><strong>Deliverable:</strong> <code>annotations/error_labels.csv</code> và <code>annotations/scores.csv</code> hoàn chỉnh cho toàn bộ dataset, kèm biểu đồ sanity check.</li>
+</ol>
+<p><strong>Tuần 4:</strong></p>
+<ol>
+<li>Dataset loader: đọc <code>diff_sequence</code> theo từng đoạn (cửa sổ trượt) + nhãn lỗi multi-label tương ứng.</li>
+<li>Model multi-label đầu tiên: shared encoder (MLP/CNN nhỏ) + nhiều head sigmoid (1 head/loại lỗi), loss = Binary Cross-Entropy cho từng head.</li>
+<li><strong>Deliverable:</strong> model train chạy được.</li>
+</ol>
+<p><strong>Tuần 5:</strong></p>
+<ol>
+<li>Đánh giá <strong>Precision/Recall/F1 theo từng loại lỗi riêng</strong> (per-error, không chỉ overall accuracy — vì lỗi thường mất cân bằng, ít đoạn có lỗi hơn đoạn đúng).</li>
+<li>So sánh DL model vs rule-based (threshold DTW đơn thuần) — chứng minh DL học được pattern tinh vi hơn rule.</li>
+<li>Viết hàm &quot;nén&quot; <code>error_probabilities</code> theo từng đoạn → <code>error_embedding</code> tổng hợp cho cả video (vd. trung bình có trọng số, hoặc max-pooling theo severity) — đây là output đưa vào fusion.</li>
+<li><strong>Deliverable:</strong> bảng Precision/Recall/F1 per-error, API <code>error_model(diff_sequence_windowed) -&gt; error_probabilities, error_embedding</code>.</li>
+</ol>
+<p><strong>Tuần 6-8:</strong> chủ trì phần LLM feedback (tuần 7, vì cần hiểu rõ nhất cấu trúc lỗi để viết prompt tốt), tham gia fusion/ablation.</p>
+<h3>File code Person 3 phụ trách</h3>
+<pre><code>src/error_dl/error_model.py
+src/error_dl/train.py
+src/error_dl/dataset.py
+src/error_dl/rule_engine.py   (baseline, không phải DL)
+</code></pre>
+<hr>
+<h2>5. VIỆC CHUNG TUẦN 6 — Fusion + XGBoost + Ablation (bắt buộc cả 3 người)</h2>
+<ol>
+<li>Thống nhất chiều embedding thực tế (giờ mới chốt, sau khi cả 3 đã train xong tuần 5).</li>
+<li>Viết <code>src/features/fusion.py</code>: concatenate spatial + temporal + error + geometry + dtw + rule features.</li>
+<li>Train XGBoost trên <strong>dữ liệu gộp từ tất cả các bài</strong> (không train riêng từng bài), target = <code>tong_diem</code>.</li>
+<li>Chạy đủ <strong>5 ablation experiment</strong> (Geometry+DTW only / Spatial only / Spatial+Temporal / +Error / Full fusion) → so MAE/RMSE/R².</li>
+<li><strong>Thí nghiệm bổ sung bắt buộc cho multi-dance:</strong> giữ hẳn 1 bài (dance held-out) ngoài tập train, chỉ test — đo khả năng tổng quát hoá sang bài chưa từng thấy.</li>
+<li><strong>Deliverable:</strong> bảng ablation đầy đủ + bảng held-out-dance, đây là bằng chứng khoa học quan trọng nhất của báo cáo.</li>
+</ol>
+<h2>6. VIỆC CHUNG TUẦN 7 — FAISS + LLM + API</h2>
+<ol>
+<li>Tạo FAISS index <strong>riêng theo từng <code>dance_id</code></strong> (đơn giản nhất cho scope 8 tuần) — Person 1/2 hỗ trợ vì liên quan embedding.</li>
+<li>Person 3 chủ trì viết prompt cho LLM feedback (GPT-OSS-20B), input có <code>score</code>, <code>errors</code> (kèm timestamp), <code>similar_cases</code>, <code>dance_id</code> → output feedback tự nhiên. <strong>LLM không được tự đổi điểm.</strong></li>
+<li>Ghép thành API: <code>assess(video, dance_id) -&gt; {score, errors, feedback, similar_cases}</code>.</li>
+</ol>
+<h2>7. VIỆC CHUNG TUẦN 8 — Test, báo cáo, demo</h2>
+<ol>
+<li>Test end-to-end trên tập test giữ riêng, với ít nhất 2 bài khác nhau trong demo.</li>
+<li>Tổng hợp toàn bộ bảng metric (từng module + ablation + held-out-dance) vào báo cáo.</li>
+<li>Viết hạn chế trung thực (dataset nhỏ, số bài ít, taxonomy chưa đầy đủ...).</li>
+</ol>
+<hr>
+<h2>8. Bảng tóm tắt &quot;ai làm gì, khi nào cần người kia&quot;</h2>
+<table>
+<thead>
+<tr>
+<th>Tuần</th>
+<th>Person 1 cần gì từ ai</th>
+<th>Person 2 cần gì từ ai</th>
+<th>Person 3 cần gì từ ai</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2</td>
+<td>— (làm độc lập: pose extraction)</td>
+<td>Pose đã extract (từ P1) để tính geometry</td>
+<td>— (làm độc lập: taxonomy)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>DTW alignment path (từ P2)</td>
+<td>— (làm độc lập: DTW)</td>
+<td>dtw_distance_windowed (từ P2)</td>
+</tr>
+<tr>
+<td>4-5</td>
+<td>— (train độc lập)</td>
+<td>— (train độc lập)</td>
+<td>diff_sequence format thống nhất (từ P1)</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Embedding của P2, P3 để fusion</td>
+<td>Embedding của P1, P3 để fusion</td>
+<td>Embedding của P1, P2 để fusion</td>
+</tr>
+<tr>
+<td>7</td>
+<td>—</td>
+<td>—</td>
+<td>Toàn bộ output 3 nhánh để viết prompt LLM</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Ghi nhớ:</strong> tuần 2-5 mỗi người làm khá độc lập (đúng nguyên tắc mỗi người có DL riêng, khối lượng ngang nhau), chỉ tuần 3 có 1 điểm phối hợp bắt buộc (DTW → alignment + gợi ý gán nhãn), và tuần 6-8 là lúc ráp lại cùng nhau.</p>
+<hr>
+<h2>9. Bắt đầu ngay hôm nay — việc đầu tiên mỗi người nên làm</h2>
+<ul>
+<li><strong>Cả nhóm:</strong> họp 30 phút chọn bài nhảy, tạo repo, phân công quay video.</li>
+<li><strong>Person 1:</strong> cài MediaPipe, thử chạy <code>extract_pose()</code> trên 1 video bất kỳ để chắc chắn môi trường hoạt động trước khi có video thật.</li>
+<li><strong>Person 2:</strong> cài <code>dtaidistance</code> hoặc <code>fastdtw</code>, thử code DTW trên 2 chuỗi số giả (không cần video) để nắm thuật toán trước.</li>
+<li><strong>Person 3:</strong> bắt đầu viết taxonomy lỗi ngay (không cần chờ video/code gì cả) — đây là việc có thể làm sớm nhất, không phụ thuộc kỹ thuật.</li>
+</ul>
+
+</body></html>

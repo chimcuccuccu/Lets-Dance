@@ -12,7 +12,9 @@ Trích skeleton từ video bằng MediaPipe Pose.
 
 | File | Vai trò |
 |---|---|
-| `mediapipe.py` | Hàm extract chính |
+| `pose_extractor.py` | Hàm extract chính (`extract_pose`) |
+| `mp_alias.py` | Alias re-export (tương thích docs cũ; không đặt tên `mediapipe.py` vì đụng package) |
+| `extract_all.py` | Batch → `poses/{dance_id}/{video_id}.npy` |
 
 ## Output
 
