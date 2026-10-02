@@ -4,10 +4,12 @@ Mỗi `dance_id` là một bài độc lập, dùng chung pipeline (không train
 
 ```
 dances/
-├── dance_001/     # bài 1
-├── dance_002/     # bài 2
-└── dance_003/     # bài 3 (có thể để trống nếu chỉ chọn 2 bài)
+├── dance_001/ … dance_012/   # map từ Demo D01…D12
+    ├── reference/{dance_id}_ref.mp4
+    └── performers/{video_id}.mp4   # ví dụ D01_P003_T01.mp4
 ```
+
+Nguồn hiện tại: copy từ `Demo/lets_dance/data/raw` (+ pose sẵn trong `poses/`, nhãn `annotations/scores.csv`).
 
 ## Đặt tên file (thống nhất)
 

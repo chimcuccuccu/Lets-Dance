@@ -12,7 +12,8 @@ Biến pose thô thành chuỗi so sánh được với reference.
 
 | File | Vai trò |
 |---|---|
-| `preprocess.py` | Chuẩn hoá + `compute_diff` |
+| `preprocess.py` | Chuẩn hoá + `compute_diff` / `build_diff_sequence` |
+| `build_diffs.py` | Batch tạo `*_diff.npy` từ `poses/` + optional DTW path |
 
 ## Kiểm tra nhanh
 
