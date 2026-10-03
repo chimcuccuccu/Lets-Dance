@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chấm điểm động tác nhảy</title>
+<style>
+  :root {
+    --bg: #faf9f6;
+    --surface: #ffffff;
+    --ink: #1c1c1a;
+    --ink-soft: #5a5950;
+    --line: #e4e1d8;
+    --accent: #2f6b64;
+    --accent-soft: #e4efed;
+    --warn: #b5502f;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17181a; --surface: #202224; --ink: #ece9e1;
+      --ink-soft: #a6a398; --line: #34363a; --accent: #6fb3aa; --accent-soft: #233330;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17181a; --surface: #202224; --ink: #ece9e1;
+    --ink-soft: #a6a398; --line: #34363a; --accent: #6fb3aa; --accent-soft: #233330;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    padding: calc(24px + env(safe-area-inset-top, 0px)) 16px calc(40px + env(safe-area-inset-bottom, 0px));
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--ink-soft); font-size: 0.92rem; margin: 0 0 20px; line-height: 1.5; }
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 20px; margin-bottom: 20px;
+  }
+  .criteria { display: grid; gap: 10px; margin-bottom: 18px; }
+  .criteria summary { cursor: pointer; font-weight: 600; font-size: 0.95rem; }
+  .criteria ul { margin: 10px 0 0; padding-left: 20px; font-size: 0.88rem; color: var(--ink-soft); line-height: 1.6; }
+  .row { display: flex; gap: 12px; margin-bottom: 14px; }
+  .row > div { flex: 1; }
+  label { display: block; font-size: 0.82rem; color: var(--ink-soft); margin-bottom: 4px; }
+  input[type=text], input[type=number] {
+    width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 7px;
+    background: var(--bg); color: var(--ink); font-size: 0.95rem;
+  }
+  .score-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .score-val { font-variant-numeric: tabular-nums; font-weight: 600; width: 34px; text-align: right; }
+  .total {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 12px 14px; background: var(--accent-soft); border-radius: 8px; margin: 14px 0;
+  }
+  .total strong { font-size: 1.3rem; color: var(--accent); }
+  button {
+    appearance: none; border: none; border-radius: 7px; padding: 10px 16px;
+    font-size: 0.92rem; font-weight: 600; cursor: pointer;
+  }
+  .btn-primary { background: var(--accent); color: white; width: 100%; }
+  .btn-secondary { background: transparent; border: 1px solid var(--line); color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+  th { color: var(--ink-soft); font-weight: 600; font-size: 0.78rem; }
+  .table-scroll { overflow-x: auto; }
+  .del { background: none; border: none; color: var(--warn); cursor: pointer; font-size: 0.8rem; padding: 2px 6px; }
+  .empty { color: var(--ink-soft); font-size: 0.88rem; padding: 10px 0; }
+  .footer-actions { display: flex; gap: 10px; margin-top: 14px; }
+  .footer-actions button { flex: 1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Chấm điểm động tác nhảy</h1>
+  <p class="sub">Xem video performer, chấm theo 3 tiêu chí bên dưới, rồi bấm "Thêm vào danh sách". Khi chấm xong hết, bấm "Xuất file CSV" để gửi lại cho nhóm.</p>
+
+  <div class="card">
+    <details class="criteria">
+      <summary>Tiêu chí chấm điểm (bấm để xem chi tiết)</summary>
+      <ul>
+        <li><b>Khớp động tác (0–100):</b> đúng hình dạng, đúng hướng so với video mẫu, không xét nhịp.</li>
+        <li><b>Khớp nhịp (0–100):</b> đúng thời điểm so với nhạc/video mẫu, không xét hình dạng động tác.</li>
+        <li><b>Năng lượng/biên độ (0–100):</b> độ dứt khoát, biên độ chuyển động so với video mẫu.</li>
+      </ul>
+    </details>
+
+    <div class="row">
+      <div>
+        <label for="dance">Mã bài nhảy (dance_id)</label>
+        <input type="text" id="dance" placeholder="dance_001">
+      </div>
+      <div>
+        <label for="video">Mã video (video_id)</label>
+        <input type="text" id="video" placeholder="dance001_person001_take1">
+      </div>
+    </div>
+
+    <div class="row" style="flex-direction:column;">
+      <div>
+        <label>Khớp động tác</label>
+        <div class="score-row">
+          <input type="range" id="s1" min="0" max="100" value="70">
+          <span class="score-val" id="s1v">70</span>
+        </div>
+      </div>
+      <div>
+        <label>Khớp nhịp</label>
+        <div class="score-row">
+          <input type="range" id="s2" min="0" max="100" value="70">
+          <span class="score-val" id="s2v">70</span>
+        </div>
+      </div>
+      <div>
+        <label>Năng lượng / biên độ</label>
+        <div class="score-row">
+          <input type="range" id="s3" min="0" max="100" value="70">
+          <span class="score-val" id="s3v">70</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="total">
+      <span>Tổng điểm</span>
+      <strong id="totalVal">210</strong>
+    </div>
+
+    <button class="btn-primary" id="addBtn">Thêm vào danh sách</button>
+    <p id="msg" style="margin:10px 0 0;font-size:0.85rem;min-height:1.2em;"></p>
+  </div>
+
+  <div class="card">
+    <div class="table-scroll">
+      <table id="entriesTable">
+        <thead>
+          <tr><th>Dance</th><th>Video</th><th>Động tác</th><th>Nhịp</th><th>Năng lượng</th><th>Tổng</th><th></th></tr>
+        </thead>
+        <tbody id="entriesBody"></tbody>
+      </table>
+      <div class="empty" id="emptyMsg">Chưa có video nào được chấm.</div>
+    </div>
+    <div class="footer-actions">
+      <button class="btn-secondary" id="clearBtn">Xoá hết</button>
+      <button class="btn-primary" id="exportBtn">Xuất file CSV</button>
+    </div>
+    <p id="exportMsg" style="margin:10px 0 0;font-size:0.85rem;min-height:1.2em;"></p>
+    <div id="csvFallback" style="display:none;margin-top:10px;">
+      <label>Không tải file tự động được — bấm "Copy" hoặc chọn hết nội dung bên dưới rồi dán vào file .csv:</label>
+      <textarea id="csvText" readonly rows="6" style="width:100%;margin-top:6px;padding:8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--ink);font-family:monospace;font-size:0.8rem;"></textarea>
+      <button class="btn-secondary" id="copyBtn" style="margin-top:8px;">Copy nội dung</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const STORAGE_KEY = "dance_scoring_entries";
+  let entries = [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) entries = JSON.parse(raw);
+  } catch (e) { entries = []; }
+
+  const s1 = document.getElementById('s1'), s2 = document.getElementById('s2'), s3 = document.getElementById('s3');
+  const s1v = document.getElementById('s1v'), s2v = document.getElementById('s2v'), s3v = document.getElementById('s3v');
+  const totalVal = document.getElementById('totalVal');
+
+  function updateTotal() {
+    s1v.textContent = s1.value; s2v.textContent = s2.value; s3v.textContent = s3.value;
+    totalVal.textContent = (Number(s1.value) + Number(s2.value) + Number(s3.value));
+  }
+  [s1, s2, s3].forEach(el => el.addEventListener('input', updateTotal));
+  updateTotal();
+
+  function persist() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(entries)); } catch (e) {}
+  }
+
+  function render() {
+    const body = document.getElementById('entriesBody');
+    const empty = document.getElementById('emptyMsg');
+    body.innerHTML = '';
+    if (entries.length === 0) { empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    entries.forEach((e, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${e.dance_id}</td><td>${e.video_id}</td><td>${e.khop_dong_tac}</td>
+        <td>${e.khop_nhip}</td><td>${e.nang_luong}</td><td><b>${e.tong_diem}</b></td>
+        <td><button class="del" data-i="${i}">Xoá</button></td>`;
+      body.appendChild(tr);
+    });
+    body.querySelectorAll('.del').forEach(btn => {
+      btn.addEventListener('click', () => {
+        entries.splice(Number(btn.dataset.i), 1);
+        persist(); render();
+      });
+    });
+  }
+  render();
+
+  const msg = document.getElementById('msg');
+  function showMsg(text, isError) {
+    msg.textContent = text;
+    msg.style.color = isError ? 'var(--warn)' : 'var(--accent)';
+    if (text) setTimeout(() => { if (msg.textContent === text) msg.textContent = ''; }, 3500);
+  }
+
+  document.getElementById('addBtn').addEventListener('click', () => {
+    const dance_id = document.getElementById('dance').value.trim();
+    const video_id = document.getElementById('video').value.trim();
+    if (!dance_id || !video_id) { showMsg('Nhập đủ mã bài nhảy và mã video trước khi thêm.', true); return; }
+    const khop_dong_tac = Number(s1.value), khop_nhip = Number(s2.value), nang_luong = Number(s3.value);
+    entries.push({
+      dance_id, video_id, khop_dong_tac, khop_nhip, nang_luong,
+      tong_diem: khop_dong_tac + khop_nhip + nang_luong
+    });
+    persist(); render();
+    document.getElementById('video').value = '';
+    showMsg('Đã thêm "' + video_id + '" vào danh sách.', false);
+  });
+
+  const clearBtn = document.getElementById('clearBtn');
+  let clearArmed = false;
+  clearBtn.addEventListener('click', () => {
+    if (entries.length === 0) return;
+    if (!clearArmed) {
+      clearArmed = true;
+      clearBtn.textContent = 'Bấm lần nữa để xác nhận xoá';
+      setTimeout(() => { clearArmed = false; clearBtn.textContent = 'Xoá hết'; }, 3000);
+      return;
+    }
+    entries = []; persist(); render();
+    clearArmed = false; clearBtn.textContent = 'Xoá hết';
+  });
+
+  function buildCsv() {
+    const header = 'dance_id,video_id,khop_dong_tac,khop_nhip,nang_luong,tong_diem';
+    const rows = entries.map(e => `${e.dance_id},${e.video_id},${e.khop_dong_tac},${e.khop_nhip},${e.nang_luong},${e.tong_diem}`);
+    return [header, ...rows].join('\n');
+  }
+
+  function showCsvFallback(csv) {
+    document.getElementById('csvFallback').style.display = 'block';
+    document.getElementById('csvText').value = csv;
+  }
+
+  document.getElementById('exportBtn').addEventListener('click', async () => {
+    const exportMsg = document.getElementById('exportMsg');
+    if (entries.length === 0) {
+      exportMsg.style.color = 'var(--warn)';
+      exportMsg.textContent = 'Chưa có dữ liệu để xuất.';
+      return;
+    }
+    const csv = buildCsv();
+    let saved = false;
+    try {
+      if (window.claude && typeof window.claude.use === 'function') {
+        const downloads = await window.claude.use('downloads');
+        if (downloads) {
+          await downloads.save({ filename: 'scores.csv', data: csv });
+          saved = true;
+        }
+      }
+    } catch (e) { saved = false; }
+
+    if (saved) {
+      exportMsg.style.color = 'var(--accent)';
+      exportMsg.textContent = 'Đã lưu file scores.csv.';
+      document.getElementById('csvFallback').style.display = 'none';
+    } else {
+      exportMsg.style.color = 'var(--ink-soft)';
+      exportMsg.textContent = 'Không tải tự động được trong môi trường này — dùng nội dung bên dưới:';
+      showCsvFallback(csv);
+    }
+  });
+
+  document.getElementById('copyBtn').addEventListener('click', async () => {
+    const ta = document.getElementById('csvText');
+    ta.focus(); ta.select();
+    let copied = false;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(ta.value);
+        copied = true;
+      }
+    } catch (e) { copied = false; }
+    if (!copied) {
+      try { copied = document.execCommand('copy'); } catch (e) { copied = false; }
+    }
+    const exportMsg = document.getElementById('exportMsg');
+    exportMsg.style.color = copied ? 'var(--accent)' : 'var(--warn)';
+    exportMsg.textContent = copied ? 'Đã copy nội dung CSV.' : 'Không copy được — hãy chọn thủ công và Ctrl+C.';
+  });
+</script>
+</body>
+</html>
