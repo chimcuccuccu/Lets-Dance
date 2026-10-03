@@ -118,7 +118,34 @@ Một số flag train thường dùng:
 
 ---
 
-## 6. QA Person 1
+## 6. Trích xuất đặc trưng hình học (Geometry Features - Person 2)
+
+```powershell
+python -m src.features.geometry
+```
+
+- Đây là module trích xuất các góc khớp quan trọng (đầu gối, khuỷu tay, vai, hông) từ dữ liệu pose.
+- **Output:** Trả về ma trận đặc trưng hình học có shape `(T, 8)`.
+
+---
+
+## 7. Chạy pipeline DTW (Căn chỉnh thời gian - Person 2)
+
+Phải chạy sau khi đã có toàn bộ dữ liệu pose `.npy` trong thư mục `poses/`.
+
+```powershell
+python -m src.features.run_dtw_all
+```
+
+Module này sẽ tự động duyệt qua tất cả các bài nhảy, lấy file tham chiếu (`_ref.npy`) và dữ liệu người tập (`Dxx_Pxxx_T01.npy`), sau đó thực hiện Dynamic Time Warping để tính độ lệch thời gian.
+
+**Output quan trọng cho các thành viên khác:**
+1. **Cho Person 1:** Trả về `alignment_path` (đường dẫn căn chỉnh thời gian) để Person 1 dùng ánh xạ chuỗi frames giữa người tập và tham chiếu khi tính `diff_sequence`.
+2. **Cho Person 3:** Tạo ra file `annotations/dtw_features.csv`. File này chứa khoảng cách DTW (`dtw_dist`) giữa các phân đoạn. Đồng đồng thời engine đã tự động cắm cờ các phân đoạn có khoảng cách lớn (`flag_seg_x = True/False`). Person 3 sẽ dựa vào các cờ này để gán nhãn lỗi cho các phân đoạn.
+
+---
+
+## 8. QA Person 1
 
 ```powershell
 python scripts/qa_person1.py
@@ -129,21 +156,23 @@ Kiểm tra coverage pose, invariant preprocess, diff vs reference.
 
 ---
 
-## 7. Thứ tự làm việc gợi ý (Person 1)
+## 9. Thứ tự làm việc gợi ý (Person 1 & Person 2)
 
 ```
 Video
-  → extract_all / pose_extractor     → poses/*.npy
+  → extract_all / pose_extractor     → poses/*.npy (Person 1)
   → visualize (tuỳ chọn)             → xem skeleton
   → test_pipeline [--model]          → smoke test
-  → build_diffs                      → poses/diffs/
+  → extract_geometry (Person 2)      → Tọa độ góc khớp
+  → run_dtw_all (Person 2)           → annotations/dtw_features.csv (Person 3) & alignment path (Person 1)
+  → build_diffs (Person 1)           → poses/diffs/
   → spatial_dl.train                 → checkpoint
   → eval_spatial                     → MAE / Pearson
 ```
 
 ---
 
-## 8. Lỗi thường gặp
+## 10. Lỗi thường gặp
 
 | Triệu chứng | Cách xử lý |
 |-------------|------------|
@@ -155,7 +184,7 @@ Video
 
 ---
 
-## 9. Tài liệu liên quan
+## 11. Tài liệu liên quan
 
 | File | Nội dung |
 |------|----------|

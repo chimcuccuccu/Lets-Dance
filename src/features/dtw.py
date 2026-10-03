@@ -158,3 +158,32 @@ def dtw_distance_windowed(
         _, d = dtw_align(p, r, max_frames=max_frames_per_window)
         distances.append(d)
     return np.asarray(distances, dtype=np.float64)
+
+def flag_suspicious_segments(
+    dtw_windowed_distances: np.ndarray,
+    threshold_multiplier: float = 1.5,
+    absolute_threshold: float = 0.0
+) -> np.ndarray:
+    """
+    Rule engine cơ bản: Cắm cờ 'nghi ngờ' cho đoạn có dtw_distance cao bất thường.
+    Person 3 sẽ dựa vào cờ này để tập trung gán nhãn loại lỗi chi tiết.
+    
+    Args:
+        dtw_windowed_distances: mảng float khoảng cách DTW từng đoạn
+        threshold_multiplier: hệ số nhân của độ lệch chuẩn để tính ngưỡng
+        absolute_threshold: ngưỡng tối thiểu tĩnh (phòng khi std = 0)
+    Returns:
+        Mảng int (0 hoặc 1) cùng độ dài với mảng đầu vào.
+    """
+    if len(dtw_windowed_distances) == 0:
+        return np.array([], dtype=int)
+        
+    distances = np.asarray(dtw_windowed_distances)
+    mean_dist = np.mean(distances)
+    std_dist = np.std(distances)
+    
+    threshold = max(mean_dist + threshold_multiplier * std_dist, absolute_threshold)
+    
+    # 1 nếu vượt ngưỡng, ngược lại 0
+    flags = (distances > threshold).astype(int)
+    return flags
