@@ -23,11 +23,11 @@ MediaPipe → preprocessing → diff_sequence = performer − reference (đã al
 
 ## Ai phụ trách gì
 
-| Người | Nhánh | Thư mục chính | Deliverable |
+| Thành viên | Nhánh | Thư mục chính | Deliverable |
 |---|---|---|---|
-| Person 1 | Spatial DL — hình / tư thế lệch | `src/pose`, `src/preprocessing`, `src/spatial_dl` | embedding không gian |
-| Person 2 | Temporal DL + DTW — nhịp / timing | `src/features`, `src/temporal_dl` | embedding thời gian + DTW |
-| Person 3 | Error DL — loại lỗi theo đoạn | `src/error_dl`, `docs/` | xác suất lỗi + embedding lỗi |
+| Đỗ Lý Minh Anh | Spatial DL — hình / tư thế lệch | `src/pose`, `src/preprocessing`, `src/spatial_dl` | embedding không gian |
+| Nguyễn Duy Anh | Temporal DL + DTW — nhịp / timing | `src/features`, `src/temporal_dl` | embedding thời gian + DTW |
+| Nguyễn Thị Ngân | Error DL — loại lỗi theo đoạn | `src/error_dl`, `docs/` | xác suất lỗi + embedding lỗi |
 | Cả nhóm (tuần 6–8) | Fusion, FAISS, LLM, báo cáo | `src/features/fusion.py`, `src/scoring`, `src/retrieval`, `src/feedback` | điểm + feedback |
 
 Đọc README trong từng folder trước khi viết code. Format dữ liệu bắt buộc: [`docs/data_format.md`](docs/data_format.md).
