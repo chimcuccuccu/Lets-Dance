@@ -33,6 +33,10 @@ venv/
 *.npy
 *.npz
 
+# AIST++ annotations (lớn — tải bằng scripts/download_aistpp.py)
+data/aistpp/**
+!data/aistpp/README.md
+
 # Feature CSV trung gian (regenerate local, không đẩy Git)
 annotations/demo_features/
 annotations/demo_source/

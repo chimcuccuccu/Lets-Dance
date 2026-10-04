@@ -99,11 +99,35 @@ python -m src.preprocessing.build_diffs --scores annotations/scores.csv --poses 
 # 2) Train SpatialModelV3
 python -m src.spatial_dl.train --official --epochs 40
 
+# (Khuyến nghị) Improved: mix pretrain + freeze/unfreeze + khop_dong_tac + early-stop
+python -m src.spatial_dl.pretrain --improved
+python -m src.spatial_dl.train --improved --official --epochs 40
+python scripts/eval_spatial.py --ckpt experiments/spatial_dl_improved/spatial_model_v3_best.pth
+
+# Tuần 5: PCA/t-SNE + ablation XGBoost (Spatial vs raw geometry)
+python scripts/visualize_spatial_embeddings.py
+python scripts/eval_spatial_xgb.py
+
+# (Tuỳ chọn) Fine-tune đơn giản từ AIST++ pretrain
+python -m src.spatial_dl.train --official --epochs 40 --pretrained checkpoints/spatial_pretrained.pt --target tong_diem
+
 # 3) Eval
 python scripts/eval_spatial.py
 ```
 
-Checkpoint: `experiments/spatial_dl/spatial_model_v3_best.pth`
+Checkpoint: `experiments/spatial_dl/spatial_model_v3_best.pth`  
+Improved: `experiments/spatial_dl_improved/spatial_model_v3_best.pth`
+
+### 5b. AIST++ pretrain encoder (tuỳ chọn)
+
+Chi tiết: [`docs/aist_pretrain.md`](docs/aist_pretrain.md)
+
+```powershell
+python scripts/download_aistpp.py
+python -m src.spatial_dl.pretrain --epochs 20
+# Smoke không cần download:
+python scripts/smoke_aist_pretrain.py
+```
 
 Một số flag train thường dùng:
 
@@ -115,6 +139,7 @@ Một số flag train thường dùng:
 | `--data-path` | Thư mục diff (mặc định `poses/diffs`) |
 | `--no-aug` | Tắt augmentation |
 | `--raw-score` | Không chia `tong_diem/300` |
+| `--pretrained PATH` | Load encoder từ AIST pretrain |
 
 ---
 
@@ -145,14 +170,23 @@ Module này sẽ tự động duyệt qua tất cả các bài nhảy, lấy fil
 
 ---
 
-## 8. QA Person 1
+## 8. QA / Demo trực quan Person 1
 
 ```powershell
+# Checklist PASS/FAIL (pose, preprocess, diff)
 python scripts/qa_person1.py
-python scripts/qa_person1.py --dance dance_001 --visualize
+
+# Demo trực quan tuần 2–5 → PNG trong experiments/spatial_dl_improved/demo/
+python scripts/demo_person1.py
+
+# Xem skeleton 1 video
+python src/visualize.py poses/dance_001/D01_P003_T01.npy
+
+# Smoke pipeline + model
+python src/test_pipeline.py --model
 ```
 
-Kiểm tra coverage pose, invariant preprocess, diff vs reference.
+`demo_person1.py` xuất: heatmap diff, train curve, pred vs actual, PCA embedding, ablation bars.
 
 ---
 

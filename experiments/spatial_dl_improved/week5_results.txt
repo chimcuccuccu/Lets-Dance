@@ -1,0 +1,34 @@
+Person 1 — Tuần 5 results (Spatial DL) — sau cải tiến dual/aux
+==============================================================
+
+Phạm vi: chỉ Person 1 (pose / preprocess / spatial_dl). Không sửa P2/P3.
+
+Cải tiến đã áp dụng
+-------------------
+1) Dual embedding: raw → score head; L2-norm → fusion API
+2) Aux loss joint-group (face/arms/torso/legs, limbs nặng hơn) weight=0.2
+3) TTA mirror: tuỳ chọn lúc infer (mặc định tắt — trên val hiện tại không giúp)
+
+1) Fine-tune (target=khop_dong_tac, official 183/34, AIST pretrain)
+   - Best epoch: 25 (early-stop @ 35)
+   - Val MAE: 5.54 / 100   (trước cải tiến: 5.95)
+   - Val RMSE: 6.70
+   - Val Pearson: 0.736    (trước: 0.681)
+   - Checkpoint: experiments/spatial_dl_improved/spatial_model_v3_best.pth
+
+2) TTA so sánh (cùng checkpoint)
+   - no-TTA: MAE=5.54  r=0.736
+   - TTA:    MAE=5.86  r=0.722  → không dùng mặc định trên set này
+
+3) Ablation XGB (PCA→32, target=khop_dong_tac)
+     Raw geometry      MAE=8.90  r=0.269
+     Raw diff stats    MAE=7.05  r=0.500
+     Spatial only      MAE=7.44  r=0.402   ← tốt hơn geometry (ΔMAE=+1.46)
+     Geometry+DTW      MAE=6.56  r=0.617
+     Spatial+Geo+DTW   MAE=6.23  r=0.626   ← full tạm tốt nhất trong bảng XGB
+
+4) API fusion
+   from src.spatial_dl import load_spatial_checkpoint, encode_diff, predict_score
+   model, meta = load_spatial_checkpoint("experiments/spatial_dl_improved/spatial_model_v3_best.pth")
+   embedding = encode_diff(diff_sequence, model)          # (256,) L2-norm
+   score = predict_score(diff_sequence, model, score_scale=100)

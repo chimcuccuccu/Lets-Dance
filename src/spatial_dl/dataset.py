@@ -19,6 +19,13 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TARGET_FRAMES = 150
 SCORE_MAX = 300.0
+# Per-criterion scales (Spatial branch nên ưu tiên khop_dong_tac)
+TARGET_SCALES = {
+    "tong_diem": 300.0,
+    "khop_dong_tac": 100.0,
+    "khop_nhip": 100.0,
+    "nang_luong": 100.0,
+}
 
 # MediaPipe left↔right pairs (mirror augmentation)
 _MIRROR_PAIRS = [
@@ -37,6 +44,52 @@ def mirror_pose_diff(diff: np.ndarray) -> np.ndarray:
         out[:, a] = out[:, b]
         out[:, b] = tmp
     return out
+
+
+def mirror_diff_torch(diff: torch.Tensor) -> torch.Tensor:
+    """Mirror batch/tensor diff: (T,33,3) hoặc (B,T,33,3)."""
+    if diff.dim() == 3:
+        out = diff.unsqueeze(0).clone()
+        squeeze = True
+    elif diff.dim() == 4:
+        out = diff.clone()
+        squeeze = False
+    else:
+        raise ValueError(f"Expected (T,33,3) or (B,T,33,3), got {tuple(diff.shape)}")
+    out[..., 0] *= -1.0
+    for a, b in _MIRROR_PAIRS:
+        tmp = out[:, :, a, :].clone()
+        out[:, :, a, :] = out[:, :, b, :]
+        out[:, :, b, :] = tmp
+    return out.squeeze(0) if squeeze else out
+
+
+# Nhóm khớp cho aux loss / TTA diagnostics (MediaPipe-33)
+JOINT_GROUPS = {
+    "face": list(range(0, 11)),
+    "arms": [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22],
+    "torso": [11, 12, 23, 24],
+    "legs": [23, 24, 25, 26, 27, 28, 29, 30, 31, 32],
+}
+# face nhẹ, limbs nặng — khớp với chuyên môn Spatial (hình dạng)
+JOINT_GROUP_LOSS_WEIGHTS = {
+    "face": 0.25,
+    "arms": 1.5,
+    "torso": 1.0,
+    "legs": 1.5,
+}
+
+
+def joint_group_abs_means(diff: torch.Tensor) -> torch.Tensor:
+    """(B,T,33,3) → (B, 4) mean |diff| theo face/arms/torso/legs."""
+    if diff.dim() != 4:
+        raise ValueError(f"Expected (B,T,33,3), got {tuple(diff.shape)}")
+    abs_d = diff.abs()
+    outs = []
+    for name in ("face", "arms", "torso", "legs"):
+        idxs = JOINT_GROUPS[name]
+        outs.append(abs_d[:, :, idxs, :].mean(dim=(1, 2, 3)))
+    return torch.stack(outs, dim=1)
 
 
 class SpatialDanceDataset(Dataset):
@@ -61,6 +114,8 @@ class SpatialDanceDataset(Dataset):
         alignment_dir: str = "",
         normalize_score: bool = True,
         augment: bool = False,
+        target_col: str = "tong_diem",
+        score_max: float = 0.0,
     ):
         self.use_dummy = use_dummy
         self.use_old_data = use_old_data
@@ -72,13 +127,18 @@ class SpatialDanceDataset(Dataset):
         self.data_dir = data_dir
         self.normalize_score = normalize_score
         self.augment = augment and is_train
+        self.target_col = target_col
+        self.score_max = float(
+            score_max
+            or TARGET_SCALES.get(target_col, SCORE_MAX)
+        )
         self.person_ids: List[str] = []
 
         if use_dummy:
             self.num_samples = 100
             rng = np.random.default_rng(42 if is_train else 43)
-            raw = rng.uniform(50, 300, size=(self.num_samples,)).astype(np.float32)
-            self.labels = (raw / SCORE_MAX) if normalize_score else raw
+            raw = rng.uniform(0.2 * self.score_max, self.score_max, size=(self.num_samples,)).astype(np.float32)
+            self.labels = (raw / self.score_max) if normalize_score else raw
             self.person_ids = [f"dummy_{i % 10}" for i in range(self.num_samples)]
             self.df = None
             return
@@ -108,7 +168,7 @@ class SpatialDanceDataset(Dataset):
             n = min(len(self.all_poses), len(provided))
             self.all_poses = self.all_poses[:n]
             labels = provided[:n]
-            self.labels = (labels / SCORE_MAX) if normalize_score else labels
+            self.labels = (labels / self.score_max) if normalize_score else labels
             self.num_samples = n
             self.person_ids = self.person_ids[:n]
             return
@@ -136,10 +196,12 @@ class SpatialDanceDataset(Dataset):
             self.num_samples = len(self.df)
 
     def _score_from_row(self, row) -> np.ndarray:
-        col = "tong_diem" if "tong_diem" in row.index else "score_total"
+        col = self.target_col
+        if col not in row.index:
+            col = "tong_diem" if "tong_diem" in row.index else "score_total"
         val = float(row[col])
         if self.normalize_score:
-            val = val / SCORE_MAX
+            val = val / self.score_max
         return np.array([val], dtype=np.float32)
 
     def _diff_path_for_row(self, row) -> Optional[str]:
@@ -175,12 +237,35 @@ class SpatialDanceDataset(Dataset):
     def _augment(self, diff: np.ndarray) -> np.ndarray:
         if not self.augment:
             return diff
-        out = diff
+        out = diff.astype(np.float32).copy()
+        t = out.shape[0]
+
         if np.random.rand() < 0.5:
             out = mirror_pose_diff(out)
+
+        # Temporal shift (circular) — mô phỏng lệch cửa sổ cắt
+        if t > 8 and np.random.rand() < 0.5:
+            shift = int(np.random.randint(-max(1, t // 10), max(2, t // 10)))
+            out = np.roll(out, shift, axis=0)
+
+        # Global scale jitter
         if np.random.rand() < 0.5:
-            noise = np.random.normal(0.0, 0.01, size=out.shape).astype(np.float32)
-            out = out + noise
+            out = out * float(np.random.uniform(0.9, 1.1))
+
+        # Additive noise
+        if np.random.rand() < 0.6:
+            sigma = float(np.random.uniform(0.005, 0.02))
+            out = out + np.random.normal(0.0, sigma, size=out.shape).astype(np.float32)
+
+        # Random joint dropout (zero a few joints for several frames)
+        if np.random.rand() < 0.4:
+            n_j = int(np.random.randint(1, 5))
+            joints = np.random.choice(out.shape[1], size=n_j, replace=False)
+            if t > 4:
+                a = int(np.random.randint(0, t - 2))
+                b = int(np.random.randint(a + 1, t))
+                out[a:b, joints] = 0.0
+
         return out.astype(np.float32)
 
     def __len__(self) -> int:
@@ -267,6 +352,8 @@ def get_dataloaders(
     num_workers: int = 0,
     normalize_score: bool = True,
     augment: bool = True,
+    target_col: str = "tong_diem",
+    score_max: float = 0.0,
 ):
     """
     Nếu truyền train_csv + val_csv (vd. Demo official 183/34) → dùng fixed split.
@@ -281,6 +368,8 @@ def get_dataloaders(
             target_frames=target_frames,
             alignment_dir=alignment_dir,
             normalize_score=normalize_score,
+            target_col=target_col,
+            score_max=score_max,
         )
         train_ds = SpatialDanceDataset(
             csv_file=train_csv, is_train=True, augment=augment, **common
@@ -313,6 +402,8 @@ def get_dataloaders(
         target_frames=target_frames,
         alignment_dir=alignment_dir,
         normalize_score=normalize_score,
+        target_col=target_col,
+        score_max=score_max,
     )
 
     # Một dataset nguồn để split index, rồi wrap train (aug) / val (no aug)

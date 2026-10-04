@@ -1,0 +1,12 @@
+=== Spatial embedding sanity (PCA) ===
+n=217  score=khop_dong_tac
+PCA explained variance: [0.33262092 0.17288144] (sum=0.506)
+score mean±std: 34.7 ± 11.6
+n_low: 72
+n_mid: 71
+n_high: 74
+mean_score_low: 21.938888888888886
+mean_score_mid: 35.423943661971826
+mean_score_high: 46.53513513513514
+centroid_dist(low, high) on PCA: 9.407
+Gợi ý đọc: dist càng lớn → embedding càng tách điểm thấp/cao (sanity tốt).
