@@ -28,3 +28,10 @@ Ghi nhớ: làm sai format ở đây thì tuần sau 3 nhánh không ghép đư�
 ## Error types (nháp tuần 1)
 
 `off_beat`, `wrong_move`, `low_amplitude`, `wrong_direction`, `missed_move`
+
+## AIST++ (pretrain Person 1, tuỳ chọn)
+
+- Root: `data/aistpp/keypoints3d/*.pkl` — COCO-17 `(T, 17, 3)`
+- Convert → MediaPipe `(T, 33, 4)` rồi preprocess giống data tự quay
+- Cache: `data/aistpp/mediapipe_cache/{seq}.npy`
+- Xem [`docs/aist_pretrain.md`](aist_pretrain.md)

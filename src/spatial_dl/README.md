@@ -1,41 +1,59 @@
-# `src/spatial_dl/` — Person 1, tuần 4–5
+# `src/spatial_dl/` — Person 1, tuần 4–5 (+ AIST pretrain tuỳ chọn)
 
-Học **hình dạng / tư thế lệch** so với reference từ `diff_sequence`. Đây là nhánh Deep Learning của Person 1.
-
-## Việc phải làm
-
-**Tuần 4**
-- Dataset: `diff_sequence` + `tong_diem` (sanity-check, chưa chắc là target chính).
-- Model V3 bản đầu: **1D-CNN nhỏ** trên `diff_sequence` (avg+max pool → embedding L2-norm).
-- Split **theo `person_id`** (`dataset.split_indices_by_person`) — không random theo sample.
-- Train vài epoch, log MSE/MAE, checkpoint best/last vào `experiments/spatial_dl/`.
-- Build diff trước: `python -m src.preprocessing.build_diffs --scores annotations/scores.csv`
-
-**Tuần 5**
-- Chống overfit: jitter, mirror trái-phải, giảm size nếu cần.
-- Xuất `spatial_embedding`, PCA/t-SNE: điểm cao vs điểm thấp có tách cụm không.
-- Ablation nhỏ: embedding vs raw geometry → XGBoost tạm.
+Học **hình dạng / tư thế lệch** so với reference từ `diff_sequence`.
 
 ## File
 
 | File | Vai trò |
 |---|---|
-| `dataset.py` | Loader + person split + aug nhẹ |
-| `model_v3.py` | 1D-CNN → embedding + score |
-| `train.py` | Train / checkpoint / history CSV |
+| `dataset.py` | Loader diff + person split + aug (jitter, mirror, shift…) |
+| `model_v3.py` | `SpatialEncoder` / `SpatialModelV3` / `SpatialAutoEncoder` |
+| `train.py` | Fine-tune + freeze→unfreeze + early stopping |
+| `infer.py` | **API fusion:** `encode_diff` / `export_spatial_embeddings` |
+| `joints_convert.py` | COCO-17 / SMPL-24 → MediaPipe-33 |
+| `aist_dataset.py` | AIST++ load + cache + synthetic diff |
+| `pretrain.py` | Pretrain encoder trên AIST++ |
 
-## Chạy tuần 4
+## Tuần 4 — fine-tune
 
-```bash
-# 1) Diff + DTW path
+```powershell
 python -m src.preprocessing.build_diffs --scores annotations/scores.csv --poses poses --out poses/diffs
-
-# 2) Train
 python -m src.spatial_dl.train --official --epochs 40
-
-# 3) Eval
 python scripts/eval_spatial.py
 ```
 
-**Deliverable:** API `spatial_model(diff_sequence) -> embedding` sẵn cho fusion tuần 6.
 Checkpoint: `experiments/spatial_dl/spatial_model_v3_best.pth`
+
+## AIST++ pretrain + improved fine-tune
+
+Chi tiết: [`docs/aist_pretrain.md`](../../docs/aist_pretrain.md)
+
+```powershell
+python -m src.spatial_dl.pretrain --improved
+python -m src.spatial_dl.train --improved --official --epochs 40
+python scripts/eval_spatial.py --ckpt experiments/spatial_dl_improved/spatial_model_v3_best.pth
+```
+
+## Tuần 5 — embedding, visualize, ablation (+ cải tiến)
+
+Cải tiến Person 1 (không đụng P2/P3):
+- **Dual embedding:** raw → score head; L2-norm → fusion
+- **Aux loss:** dự đoán mean `|diff|` theo face/arms/torso/legs (limbs nặng hơn)
+- **TTA:** trung bình dự đoán gốc + mirror lúc infer
+
+```powershell
+python -m src.spatial_dl.train --improved --official --epochs 40
+python scripts/eval_spatial.py --ckpt experiments/spatial_dl_improved/spatial_model_v3_best.pth
+python scripts/visualize_spatial_embeddings.py
+python scripts/eval_spatial_xgb.py
+```
+
+API:
+```python
+from src.spatial_dl import load_spatial_checkpoint, encode_diff, predict_score
+model, meta = load_spatial_checkpoint("experiments/spatial_dl_improved/spatial_model_v3_best.pth")
+emb = encode_diff(diff, model, use_tta=True)          # (256,) fusion
+score = predict_score(diff, model, use_tta=True)      # điểm khop_dong_tac
+```
+
+Không đụng code Person 2/3 (chỉ *đọc* geometry/DTW khi ablation).
