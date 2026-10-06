@@ -159,6 +159,7 @@ def dtw_distance_windowed(
         distances.append(d)
     return np.asarray(distances, dtype=np.float64)
 
+
 def flag_suspicious_segments(
     dtw_windowed_distances: np.ndarray,
     threshold_multiplier: float = 1.5,

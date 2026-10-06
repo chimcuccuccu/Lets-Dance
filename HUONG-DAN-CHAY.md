@@ -166,11 +166,31 @@ Module này sẽ tự động duyệt qua tất cả các bài nhảy, lấy fil
 
 **Output quan trọng cho các thành viên khác:**
 1. **Cho Person 1:** Trả về `alignment_path` (đường dẫn căn chỉnh thời gian) để Person 1 dùng ánh xạ chuỗi frames giữa người tập và tham chiếu khi tính `diff_sequence`.
-2. **Cho Person 3:** Tạo ra file `annotations/dtw_features.csv`. File này chứa khoảng cách DTW (`dtw_dist`) giữa các phân đoạn. Đồng đồng thời engine đã tự động cắm cờ các phân đoạn có khoảng cách lớn (`flag_seg_x = True/False`). Person 3 sẽ dựa vào các cờ này để gán nhãn lỗi cho các phân đoạn.
+2. **Cho Person 3:** Tạo ra file `annotations/dtw_features.csv`. File này chứa khoảng cách DTW (`dtw_dist`) giữa các phân đoạn. Đồng thời engine đã tự động cắm cờ các phân đoạn có khoảng cách lớn (`flag_seg_x = True/False`). Person 3 sẽ dựa vào các cờ này để gán nhãn lỗi cho các phân đoạn.
 
 ---
 
-## 8. QA / Demo trực quan Person 1
+## 8. Train Temporal DL (BiLSTM - Person 2)
+
+Temporal DL phân tích nhịp điệu thời gian dựa trên các góc khớp hình học và khoảng cách DTW.
+Chi tiết xem tại [`docs/temporal_pretrain.md`](docs/temporal_pretrain.md).
+
+```powershell
+# 1) Pretrain trên AIST++ (Phân loại thể loại nhảy, tạo warm-start)
+python -m src.temporal_dl.train pretrain --epochs 20
+
+# 2) Train model chính (Dự đoán điểm khớp/trượt nhịp trên video thực)
+python -m src.temporal_dl.train train --epochs 30
+```
+
+- **Pretrain Output:** `checkpoints/temporal_pretrained.pt` và `experiments/temporal_dl/pretrain_history.csv`
+- **Train Output:** `experiments/temporal_dl/temporal_best.pth` và `experiments/temporal_dl/train_history.csv`
+
+Hệ thống sẽ tự động quét và load `temporal_pretrained.pt` (nếu có) khi chạy `train` để giúp model train hội tụ nhanh hơn.
+
+---
+
+## 9. QA / Demo trực quan Person 1
 
 ```powershell
 # Checklist PASS/FAIL (pose, preprocess, diff)
@@ -190,7 +210,7 @@ python src/test_pipeline.py --model
 
 ---
 
-## 9. Thứ tự làm việc gợi ý (Person 1 & Person 2)
+## 10. Thứ tự làm việc gợi ý (Person 1 & Person 2)
 
 ```
 Video
@@ -206,7 +226,7 @@ Video
 
 ---
 
-## 10. Lỗi thường gặp
+## 11. Lỗi thường gặp
 
 | Triệu chứng | Cách xử lý |
 |-------------|------------|
@@ -218,12 +238,14 @@ Video
 
 ---
 
-## 11. Tài liệu liên quan
+## 12. Tài liệu liên quan
 
 | File | Nội dung |
 |------|----------|
 | [`README.md`](README.md) | Tổng quan kiến trúc, cấu trúc repo |
 | [`src/pose/README.md`](src/pose/README.md) | Pose extract |
 | [`src/spatial_dl/README.md`](src/spatial_dl/README.md) | Train Spatial DL |
+| [`docs/aist_pretrain.md`](docs/aist_pretrain.md) | Person 1: AIST++ Spatial pretrain |
+| [`docs/temporal_pretrain.md`](docs/temporal_pretrain.md) | Person 2: AIST++ Temporal (genre) pretrain |
 | [`docs/data_format.md`](docs/data_format.md) | Format dữ liệu bắt buộc |
 | [`.env.example`](.env.example) | Biến môi trường mẫu |

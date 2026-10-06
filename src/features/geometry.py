@@ -17,6 +17,7 @@ ANGLE_DEFINITIONS = {
     "right_hip": (12, 24, 26),
 }
 
+
 def calculate_angle(p1: np.ndarray, p2: np.ndarray, p3: np.ndarray) -> np.ndarray:
     """
     Tính góc (đơn vị: độ) tại điểm p2, tạo bởi 2 vector p2->p1 và p2->p3.
@@ -46,6 +47,7 @@ def calculate_angle(p1: np.ndarray, p2: np.ndarray, p3: np.ndarray) -> np.ndarra
     
     return angles
 
+
 def compute_geometry_features(pose: np.ndarray) -> np.ndarray:
     """
     Từ mảng pose shape (T, 33, 3|4), trích xuất mảng đặc trưng góc khớp.
@@ -65,6 +67,7 @@ def compute_geometry_features(pose: np.ndarray) -> np.ndarray:
         features[:, i] = calculate_angle(p1, p2, p3)
         
     return features
+
 
 if __name__ == "__main__":
     # Test stub
