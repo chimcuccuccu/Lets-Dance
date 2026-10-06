@@ -22,6 +22,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import torch
+from dotenv import load_dotenv
 from torch.utils.data import DataLoader, Dataset
 
 from src.preprocessing.preprocess import normalize_length, preprocess_pipeline
@@ -30,11 +31,10 @@ from src.spatial_dl.joints_convert import convert_to_mediapipe
 
 logger = logging.getLogger(__name__)
 
+load_dotenv()
+
 DEFAULT_AIST_ROOT = "data/aistpp"
-DEFAULT_SHARED_BASIC = (
-    r"D:\Study\Đồ án\dance_coach_project\dance_coach_project"
-    r"\shared_data\dataset\Basic Dance"
-)
+DEFAULT_SHARED_BASIC = os.getenv('SHARED_DATA_AIST')
 DEFAULT_TARGET_FRAMES = 150
 DEFAULT_WINDOW_FRAMES = 180  # ~3s @ 60fps before resample
 
@@ -48,7 +48,7 @@ _SEQ_RE = re.compile(
     r"^(?P<genre>g[A-Z]{2})_.*_d(?P<dancer>\d+)_",
 )
 
-có
+
 def parse_aist_seq_name(seq_name: str) -> Tuple[str, str]:
     """Return (genre_tag, dancer_id). Fallback genre='unk', dancer=seq_name."""
     stem = Path(seq_name).stem
