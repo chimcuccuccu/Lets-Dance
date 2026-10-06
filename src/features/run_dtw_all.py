@@ -11,9 +11,7 @@ Output: annotations/dtw_features.csv
 """
 from __future__ import annotations
 
-import glob
 import logging
-import os
 import sys
 from pathlib import Path
 
