@@ -179,14 +179,82 @@ Chi tiết xem tại [`docs/temporal_pretrain.md`](docs/temporal_pretrain.md).
 # 1) Pretrain trên AIST++ (Phân loại thể loại nhảy, tạo warm-start)
 python -m src.temporal_dl.train pretrain --epochs 20
 
-# 2) Train model chính (Dự đoán điểm khớp/trượt nhịp trên video thực)
-python -m src.temporal_dl.train train --epochs 30
+# 2) Train model chính (Dự đoán điểm khớp nhịp trên video thực)
+python -m src.temporal_dl.train train --run-name khopnhip_dtw_official
 ```
 
 - **Pretrain Output:** `checkpoints/temporal_pretrained.pt` và `experiments/temporal_dl/pretrain_history.csv`
-- **Train Output:** `experiments/temporal_dl/temporal_best.pth` và `experiments/temporal_dl/train_history.csv`
+- **Train Output:** `experiments/temporal_dl/temporal_{run_name}.pth` và `train_history_{run_name}.csv`
 
 Hệ thống sẽ tự động quét và load `temporal_pretrained.pt` (nếu có) khi chạy `train` để giúp model train hội tụ nhanh hơn.
+
+> ⚠️ **Luôn truyền `--run-name`.** Bỏ trống thì lệnh ghi đè lên `temporal_best.pth` và `train_history.csv` — là deliverable Tuần 4 đã commit.
+
+---
+
+## 8b. Tuần 5 Person 2 — Ablation 3 kịch bản + correlation
+
+Trả lời câu hỏi: *DL có học thêm được gì ngoài thông tin DTW đã có không?*
+Phương pháp đầy đủ xem [`docs/temporal_week5.md`](docs/temporal_week5.md).
+
+```powershell
+# 1) Encoder (c) — 17 kênh (có kênh DTW)
+python -m src.temporal_dl.train train --split official --target-col khop_nhip `
+  --run-name khopnhip_dtw_official `
+  --pretrain-ckpt checkpoints/temporal_pretrained.pt --epochs 60 --patience 12 --seed 42
+
+# 2) Encoder (b) — 16 kênh (bỏ kênh DTW)
+python -m src.temporal_dl.train train --split official --target-col khop_nhip --no-dtw `
+  --run-name khopnhip_nodtw_official `
+  --pretrain-ckpt checkpoints/temporal_pretrained.pt --epochs 60 --patience 12 --seed 42
+
+# 3) GroupKFold 5 fold (10 lần train, mỗi lần vài phút CPU)
+foreach ($k in 0..4) {
+  python -m src.temporal_dl.train train --split groupkfold --fold $k --n-folds 5 `
+    --target-col khop_nhip --run-name khopnhip_dtw_fold$k --epochs 60 --patience 12
+  python -m src.temporal_dl.train train --split groupkfold --fold $k --n-folds 5 --no-dtw `
+    --target-col khop_nhip --run-name khopnhip_nodtw_fold$k --epochs 60 --patience 12
+}
+
+# 4) Bảng ablation (single split + CV)
+python scripts/eval_temporal_xgb.py --split official --target khop_nhip --with-dance-onehot `
+  --ckpt-dtw   experiments/temporal_dl/temporal_khopnhip_dtw_official.pth `
+  --ckpt-nodtw experiments/temporal_dl/temporal_khopnhip_nodtw_official.pth
+python scripts/eval_temporal_xgb.py --cv-folds 5 --split groupkfold `
+  --target khop_nhip --with-dance-onehot --ckpt-dir experiments/temporal_dl
+
+# 5) Pearson / Spearman với khop_nhip
+python scripts/corr_temporal_khop_nhip.py --target khop_nhip --fdr `
+  --ckpt       experiments/temporal_dl/temporal_khopnhip_dtw_official.pth `
+  --ckpt-nodtw experiments/temporal_dl/temporal_khopnhip_nodtw_official.pth
+
+# 6) Biểu đồ (chỉ đọc CSV, không cần checkpoint)
+python scripts/plot_temporal_week5.py
+
+# 7) Control S5 — xáo nhãn, mọi MAE phải tụt về ≈ baseline
+python scripts/eval_temporal_xgb.py --split official --target khop_nhip --shuffle-labels `
+  --ckpt-dtw   experiments/temporal_dl/temporal_khopnhip_dtw_official.pth `
+  --ckpt-nodtw experiments/temporal_dl/temporal_khopnhip_nodtw_official.pth
+```
+
+**Output** (đều trong `experiments/temporal_dl/`): `ablation_xgb_khop_nhip{,_cv,_folds,_shuffled}.csv`, `ablation_paired_tests_khop_nhip.csv`, `ablation_preds_khop_nhip{,_shuffled}.csv`, `correlation_khop_nhip.csv`, `temporal_embeddings_meta.csv`, `temporal_embeddings_2d.csv`, `embeddings_sanity_khop_nhip{,_shuffled}.txt`, `plots/0{1..5}_*.png`.
+
+**Kiểm tra trước khi tin bất kỳ số nào của model** — lệch là pipeline sai:
+
+| Dòng | Phải bằng |
+|---|---|
+| `dtw_distance_total` @ split=all | n=217, Pearson **−0.4419**, Spearman **−0.3764** |
+| `Baseline global-mean` | MAE **2.850**, RMSE **3.787** |
+| `Baseline dance-mean` | MAE **1.902**, RMSE **2.650** |
+
+Hai baseline này là vạch so sánh thật: `khop_nhip` có std chỉ 4.11 điểm nên MAE tuyệt đối vô nghĩa nếu không đặt cạnh chúng.
+
+**Reproduce đường legacy Tuần 4** (có leakage cấp cửa sổ, chỉ để đối chiếu) — dùng `--no-scores`, không dùng `--scores-csv ""` vì PowerShell nuốt chuỗi rỗng:
+
+```powershell
+python -m src.temporal_dl.train train --no-scores --target-col dtw_distance_total `
+  --allow-dtw-target --split random --epochs 30 --run-name week4_legacy_repro
+```
 
 ---
 
@@ -222,6 +290,10 @@ Video
   → build_diffs (Person 1)           → poses/diffs/
   → spatial_dl.train                 → checkpoint
   → eval_spatial                     → MAE / Pearson
+  → temporal_dl.train (Person 2)     → encoder (b) 16-ch + (c) 17-ch
+  → eval_temporal_xgb (Person 2)     → bảng ablation 3 kịch bản
+  → corr_temporal_khop_nhip          → Pearson/Spearman với khop_nhip
+  → plot_temporal_week5              → experiments/temporal_dl/plots/
 ```
 
 ---
@@ -247,5 +319,7 @@ Video
 | [`src/spatial_dl/README.md`](src/spatial_dl/README.md) | Train Spatial DL |
 | [`docs/aist_pretrain.md`](docs/aist_pretrain.md) | Person 1: AIST++ Spatial pretrain |
 | [`docs/temporal_pretrain.md`](docs/temporal_pretrain.md) | Person 2: AIST++ Temporal (genre) pretrain |
+| [`docs/temporal_week5.md`](docs/temporal_week5.md) | Person 2: phương pháp Tuần 5 (ablation DTW vs LSTM, chống leakage, caveat) |
+| [`src/temporal_dl/README.md`](src/temporal_dl/README.md) | Person 2: Temporal DL + API `temporal_model()` |
 | [`docs/data_format.md`](docs/data_format.md) | Format dữ liệu bắt buộc |
 | [`.env.example`](.env.example) | Biến môi trường mẫu |
