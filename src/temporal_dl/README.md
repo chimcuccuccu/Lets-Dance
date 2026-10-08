@@ -1,4 +1,4 @@
-# `src/temporal_dl/` — Person 2, tuần 4–5
+# `src/temporal_dl/` — Person 2
 
 Học **nhịp / timing lệch** so với reference. Đây là nhánh Deep Learning của Person 2.
 
@@ -11,15 +11,18 @@ Input: chuỗi ghép geometry performer, geometry reference, và `dtw_distance` 
 | `dataset.py` | Loader sequence + `build_temporal_sequence()` + split theo person |
 | `lstm.py` | BiLSTM + API `temporal_model()` |
 | `train.py` | Vòng train (`pretrain` / `train`) |
-| `infer.py` | Load checkpoint → embedding (Tuần 5) |
+| `infer.py` | Load checkpoint → embedding |
 
-## Tuần 4 — xong
+## Hai quy tắc bắt buộc về dữ liệu
 
-Dataset `(performer_geometry_seq, reference_geometry_seq, dtw_distance_seq)`, model 1-layer BiLSTM, loss giảm (`experiments/temporal_dl/train_history.csv`).
+Giải thích đầy đủ ở [`docs/temporal_eval.md`](../../docs/temporal_eval.md) §1.
 
-> **Erratum (phát hiện ở Tuần 5).** Deliverable Tuần 4 là *"model train chạy được, loss giảm"* — điều đó đúng và `train_history.csv` chứng minh. Nhưng con số `val_mae=0.0617` **không phải số generalization**, vì (i) split là `random_split` cấp **cửa sổ** nên cửa sổ của cùng một video nằm cả train lẫn val, và (ii) target là `dtw_distance_total` đã normalize, mà giá trị này cũng nằm trong kênh 17 của input → model tự tham chiếu. Tuần 5 cung cấp số generalization hợp lệ đầu tiên. File Tuần 4 giữ nguyên không sửa; run Tuần 5 ghi ra tên `temporal_khopnhip_*` riêng.
+1. **Chia train/val ở cấp video, nhóm theo `person_id`.** Dataset phát một sample cho mỗi cửa sổ, nên chia ở cấp sample sẽ để cửa sổ của cùng một video nằm cả hai phía và `val_mae` chỉ đo khả năng nhớ. Thêm nữa 20 người nhảy 217 video, không nhóm theo người thì model học "người này thường được chấm bao nhiêu".
+2. **Target không được nằm trong input.** `dtw_distance_total` là kênh thứ 17 của input, nên không được dùng làm target. `train.py` chặn bằng `SystemExit`, trừ khi truyền `--allow-dtw-target`.
 
-## Tuần 5 — 3 kịch bản bắt buộc
+Số để trích dẫn là `val_mae_video_raw` (gộp theo video, thang điểm gốc) — `val_mae` đã normalize thì không so được với baseline.
+
+## Ablation — 3 kịch bản
 
 | Kịch bản | Ý nghĩa | input_dim |
 |---|---|---|
@@ -50,7 +53,7 @@ Correlation với `khop_nhip` trên tập val (n=34): `temporal_pred_score` Spea
 > ⚠️ **Đừng lấy bảng split official làm headline.** Ở đó `(c)+dance` đạt 1.741 < dance-mean 1.902, nhưng CV cho thấy đó là nhiễu của n=34 — one-hot dance thực ra làm *tệ* đi (p=0.24). Tương tự `(a+)` đạt 1.917 trên official nhưng chỉ 2.891 trên CV, vì feature `T` gián tiếp mã hoá `dance_id`.
 
 Bảng đầy đủ → `experiments/temporal_dl/ablation_xgb_khop_nhip{,_cv,_folds}.csv`, kiểm định → `ablation_paired_tests_khop_nhip.csv`, correlation → `correlation_khop_nhip.csv`.
-Phương pháp → **`docs/temporal_week5.md`**. Kết quả + nhận định đầy đủ → **`experiments/temporal_dl/week5_results.txt`**.
+Phương pháp → **`docs/temporal_eval.md`**. Kết quả + nhận định đầy đủ → **`experiments/temporal_dl/results.txt`**.
 
 ### Đọc bảng cho đúng
 
@@ -78,10 +81,10 @@ python scripts/eval_temporal_xgb.py --split official --target khop_nhip --with-d
   --ckpt-nodtw experiments/temporal_dl/temporal_khopnhip_nodtw_official.pth
 python scripts/corr_temporal_khop_nhip.py --target khop_nhip --fdr `
   --ckpt experiments/temporal_dl/temporal_khopnhip_dtw_official.pth
-python scripts/plot_temporal_week5.py
+python scripts/plot_temporal_eval.py
 ```
 
-`*.pth` bị `.gitignore` loại nên checkpoint không vào git — sinh lại bằng 2 lệnh train ở trên. Deliverable commit là các CSV + `week5_results.txt` + `plots/*.png`; `ablation_preds_khop_nhip.csv` cho phép kiểm tra lại mọi MAE mà không cần file weight.
+`*.pth` bị `.gitignore` loại nên checkpoint không vào git — sinh lại bằng 2 lệnh train ở trên. Deliverable commit là các CSV + `results.txt` + `plots/*.png`; `ablation_preds_khop_nhip.csv` cho phép kiểm tra lại mọi MAE mà không cần file weight.
 
 ## Deliverable: API
 
@@ -98,7 +101,7 @@ embedding, dtw_features = temporal_model(seq, model=model, dtw_row=row)
 #     concat được mà không cần adapter
 ```
 
-## Caveat (chi tiết ở `docs/temporal_week5.md` §7)
+## Caveat (chi tiết ở `docs/temporal_eval.md` §7)
 
 - **`khop_nhip` không phải điểm chuyên gia** — trùng byte-for-byte `score_rhythm` trong `annotations/demo_source/labels_auto.csv` (`notes` = `auto`), không có script sinh nào trong repo.
 - **`D01_P003_T01` chính là video reference** (pose giống hệt `dance_001_ref.npy`), được chấm 300/300. Một điểm này chiếm 1/4 giá trị Pearson: r = −0.4419 với nó, −0.3349 khi bỏ. Nó nằm trong split train nên không ảnh hưởng metric val.

@@ -1,5 +1,5 @@
 """
-Person 2 — Training loops cho Temporal DL (Tuần 3-5).
+Person 2 — Training loops cho Temporal DL.
 
 Hai mode:
   python -m src.temporal_dl.train pretrain   → train genre classifier trên AIST++
@@ -11,9 +11,9 @@ Outputs:
   experiments/temporal_dl/temporal_{run_name}.pth  ← best main model
   experiments/temporal_dl/train_history_{run_name}.csv
 
-Không có --run-name thì ghi ra tên legacy (`temporal_best.pth`,
-`train_history.csv`) của Tuần 4. Mọi run Tuần 5 PHẢI dùng --run-name để không
-ghi đè deliverable Tuần 4.
+Không có --run-name thì ghi ra tên mặc định (`temporal_best.pth`,
+`train_history.csv`). LUÔN dùng --run-name cho các thí nghiệm mới để không ghi
+đè lên kết quả đã commit.
 """
 from __future__ import annotations
 
@@ -282,7 +282,7 @@ def train_temporal(
     Train TemporalRegressionModel trên dataset tự quay.
 
     Mặc định (Tuần 5): target = `khop_nhip`, split official 183/34 rời nhau theo
-    person_id. Đường legacy Tuần 4 cần `split="random"` +
+    person_id. Đường legacy cần `split="random"` +
     `target_col="dtw_distance_total"` + `allow_dtw_target=True`.
 
     Nếu có pretrain_ckpt, load backbone làm warm-start.
@@ -290,13 +290,13 @@ def train_temporal(
     """
     _ensure_dirs()
 
-    # ---- Guard target tự tham chiếu (lỗi P2 của Tuần 4) ----
+    # ---- Guard target tự tham chiếu (xem docs/temporal_eval.md §1.2) ----
     if target_col in SELF_REFERENTIAL_TARGETS and use_dtw and not allow_dtw_target:
         raise SystemExit(
             f"Target {target_col!r} cũng nằm trong input (kênh cuối, index 16) "
             f"→ model tự tham chiếu, val_mae vô nghĩa.\n"
             f"Dùng --target-col khop_nhip, hoặc --allow-dtw-target nếu cố ý "
-            f"reproduce Tuần 4."
+            f"đối chiếu lại cách cũ."
         )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -304,7 +304,7 @@ def train_temporal(
 
     # ---- Data ----
     if split == "random":
-        # Đường legacy Tuần 4 — có leakage cấp window, chỉ để reproduce.
+        # Đường legacy — có leakage cấp window, chỉ để đối chiếu.
         train_loader, val_loader = get_temporal_loaders(
             dtw_csv=dtw_csv, poses_dir=poses_dir, scores_csv=scores_csv,
             batch_size=batch_size, window_frames=window_frames,
@@ -512,7 +512,7 @@ def _build_parser() -> argparse.ArgumentParser:
     tp.add_argument("--poses-dir",      default=str(DEFAULT_POSES_DIR))
     tp.add_argument("--scores-csv",     default=str(DEFAULT_SCORES_CSV))
     tp.add_argument("--no-scores",      action="store_true",
-                    help="Không dùng file nhãn (đường legacy Tuần 4). Dùng cờ này "
+                    help="Không dùng file nhãn (đường legacy). Dùng cờ này "
                          "thay cho --scores-csv \"\" vì PowerShell nuốt chuỗi rỗng")
     tp.add_argument("--pretrain-ckpt",  default=None)
     tp.add_argument("--epochs",         type=int,   default=60)
@@ -527,7 +527,7 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Cột nhãn trong scores.csv (mặc định khop_nhip)")
     tp.add_argument("--split",          default="official",
                     choices=["official", "person", "groupkfold", "random"],
-                    help="Cách chia train/val. 'random' = legacy Tuần 4 (có leakage)")
+                    help="Cách chia train/val. 'random' = legacy (có leakage)")
     tp.add_argument("--train-csv",      default=str(DEFAULT_TRAIN_SCORES_CSV))
     tp.add_argument("--val-csv",        default=str(DEFAULT_VAL_SCORES_CSV))
     tp.add_argument("--fold",           type=int,   default=None,
@@ -542,7 +542,7 @@ def _build_parser() -> argparse.ArgumentParser:
     tp.add_argument("--patience",       type=int,   default=12,
                     help="Early stop theo val_mae_video_raw (0 = tắt)")
     tp.add_argument("--run-name",       default=None,
-                    help="Hậu tố tên output. Bỏ trống = ghi vào tên legacy Tuần 4")
+                    help="Hậu tố tên output. Bỏ trống = ghi vào tên mặc định")
     tp.add_argument("--allow-dtw-target", action="store_true",
                     help="Cho phép target dtw_distance_total (tự tham chiếu)")
 

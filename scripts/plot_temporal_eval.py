@@ -1,5 +1,5 @@
 """
-Tuần 5 Person 2 — sinh biểu đồ từ các CSV đã xuất.
+Person 2 — sinh biểu đồ từ các CSV đã xuất.
 
 Chỉ đọc CSV, KHÔNG load checkpoint — để người review vẽ lại được hình mà không
 cần file `*.pth` (bị .gitignore loại). Thiếu CSV nào thì bỏ hình đó và báo, không
@@ -61,7 +61,7 @@ BLUE_RAMP = [
 ]
 CMAP_BLUE = LinearSegmentedColormap.from_list("ds_blue", BLUE_RAMP)
 
-# Baseline đã precompute trên split official 183/34 (xem docs/temporal_week5.md)
+# Baseline đã precompute trên split official 183/34 (xem docs/temporal_eval.md)
 BASE_GLOBAL_MEAN = 2.850
 BASE_DANCE_MEAN = 1.902
 
@@ -419,7 +419,7 @@ def plot_embedding_pca(csv: Path, target: str) -> bool:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Tuần 5 Person 2 — sinh biểu đồ từ CSV")
+    ap = argparse.ArgumentParser(description="Person 2 — sinh biểu đồ từ CSV")
     ap.add_argument("--target", default="khop_nhip")
     ap.add_argument("--tag-dtw", default="khopnhip_dtw_official")
     ap.add_argument("--tag-nodtw", default="khopnhip_nodtw_official")

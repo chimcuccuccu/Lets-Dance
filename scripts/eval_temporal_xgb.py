@@ -1,5 +1,5 @@
 """
-Tuần 5 Person 2 — Ablation 3 kịch bản bắt buộc qua XGBoost tạm:
+Person 2 — Ablation 3 kịch bản bắt buộc qua XGBoost tạm:
 
   (a) DTW-only    — chỉ dtw_distance features, KHÔNG dùng DL
   (b) LSTM-only   — bỏ kênh dtw, chỉ raw sequence (encoder input_dim=16)
@@ -13,7 +13,7 @@ có std chỉ ~4.1 điểm nên MAE tuyệt đối gần như vô nghĩa nếu k
 `scripts/eval_spatial_xgb.py` (Person 1) để hyperparameter XGB y hệt → hai bảng
 so sánh được với nhau. Chỉ *đọc* output của Person 1/3, không sửa code của họ.
 
-QUY TẮC CHỐNG LEAKAGE ENCODER (xem docs/temporal_week5.md):
+QUY TẮC CHỐNG LEAKAGE ENCODER (xem docs/temporal_eval.md):
   Embedding là một hàm đã fit vào nhãn. Nếu một video từng nằm trong tập train
   của encoder thì vector của nó đã hấp thụ nhãn của chính nó. Vậy tập video
   train của encoder phải là TẬP CON của hàng train XGBoost. Script assert điều
@@ -174,8 +174,8 @@ def _assert_no_encoder_leakage(
     target: str, expect_use_dtw: bool, allow: bool,
 ) -> None:
     """
-    Chặn leakage encoder. Checkpoint Tuần 4 không có `config.train_videos` nên
-    sẽ bị từ chối — đúng ý: nó được train bằng random_split cấp window.
+    Chặn leakage encoder. Checkpoint không mang `config.train_videos` thì không
+    chứng minh được là không leakage, nên bị từ chối.
     """
     if "train_videos" not in cfg:
         raise SystemExit(

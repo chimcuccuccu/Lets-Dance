@@ -1,5 +1,5 @@
 """
-Tuần 5 Person 2 — Pearson/Spearman giữa output Temporal/DTW và cột `khop_nhip`.
+Person 2 — Pearson/Spearman giữa output Temporal/DTW và cột `khop_nhip`.
 
 Granularity: **per-video**. Correlation ở cấp cửa sổ sẽ phồng n lên ~6× với các
 mẫu không độc lập (cửa sổ cùng một video) → p-value vô nghĩa. Không làm.
@@ -91,7 +91,7 @@ def _seg_stats(row: pd.Series) -> Dict[str, float]:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(description="Tuần 5 Person 2 — correlation với khop_nhip")
+    ap = argparse.ArgumentParser(description="Person 2 — correlation với khop_nhip")
     ap.add_argument("--scores", default="annotations/scores.csv")
     ap.add_argument("--dtw", default="annotations/dtw_features.csv")
     ap.add_argument("--poses", default="poses")

@@ -1,11 +1,11 @@
 """
-Person 2 — Temporal DL Model (Tuần 3-5).
+Person 2 — Temporal DL Model.
 
 Hai class chính:
 1. TemporalBiLSTM  — backbone encoder cho sequence geometry features.
 2. AISTPPPretrainModel — backbone + genre classification head (pretrain proxy task).
 
-API deliverable Tuần 5:
+API deliverable cho fusion:
     temporal_model(seq) -> (embedding, dtw_features)
 """
 from __future__ import annotations
@@ -134,7 +134,7 @@ class AISTPPPretrainModel(nn.Module):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# TemporalRegressionModel — Model chính (Tuần 4)
+# TemporalRegressionModel — Model chính
 # ──────────────────────────────────────────────────────────────────────────────
 
 class TemporalRegressionModel(nn.Module):

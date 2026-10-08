@@ -1,5 +1,5 @@
 """
-Person 2 — Temporal DL Datasets (Tuần 3-5).
+Person 2 — Temporal DL Datasets.
 
 Hai dataset:
 1. AISTPPDataset  — load từ shared_basic_cache (.npy T×33×4), tính geometry
@@ -7,16 +7,15 @@ Hai dataset:
 2. TemporalSeqDataset — ghép (performer_geom, ref_geom, dtw_per_frame) theo
    thời gian → cho training BiLSTM chính.
 
-Tuần 5 bổ sung (xem docs/temporal_week5.md):
+Các điểm thiết kế quan trọng (xem docs/temporal_eval.md §1):
   - `build_temporal_sequence()` tách ra module-level để script eval/infer dùng
     *đúng* preprocessing của lúc train (chống lệch train/infer).
   - `use_dtw=False` → input 16 chiều (bỏ kênh dtw) cho kịch bản (b) LSTM-only.
-  - `TemporalSampleMeta` + `video_keys`/`video_person` → cho phép split theo
-    person_id ở **cấp video**, thay vì random_split cấp window (vốn làm window
-    của cùng một video nằm cả train lẫn val).
-  - `get_temporal_loaders_grouped()` — factory mới có split official/person/
-    groupkfold. `get_temporal_loaders()` giữ nguyên hành vi cũ để Tuần 4
-    reproduce được.
+  - `TemporalSampleMeta` + `video_keys`/`video_person` → split theo person_id ở
+    **cấp video**. Chia ở cấp window sẽ làm window của cùng một video nằm cả
+    train lẫn val, và val_mae khi đó đo khả năng nhớ chứ không phải tổng quát.
+  - `get_temporal_loaders_grouped()` — factory chính, có split official/person/
+    groupkfold. `get_temporal_loaders()` là đường legacy, giữ để đối chiếu.
 """
 from __future__ import annotations
 
@@ -64,7 +63,7 @@ GEOM_DIM = 8
 NODTW_INPUT_DIM = GEOM_DIM * 2       # 16
 DTW_INPUT_DIM   = GEOM_DIM * 2 + 1   # 17
 
-# Cột target nằm trong input → train trên nó là tự tham chiếu (xem Tuần 4 erratum)
+# Cột target nằm sẵn trong input → train trên nó là tự tham chiếu
 SELF_REFERENTIAL_TARGETS = ("dtw_distance_total",)
 
 VideoKey = Tuple[str, str]
@@ -366,19 +365,19 @@ class TemporalSeqDataset(Dataset):
             logger.info("Loaded %d nhãn %s từ %s", len(score_map), target_col, scores_csv)
         elif target_col not in SELF_REFERENTIAL_TARGETS:
             # Không có scores_csv mà target là cột điểm → trước đây rơi về
-            # dtw_distance_total một cách âm thầm (lỗi P2 của Tuần 4). Không
-            # cho phép nữa.
+            # dtw_distance_total một cách âm thầm. Không cho phép: thiếu nhãn
+            # thì bỏ video, không lặng lẽ đổi sang target khác.
             raise ValueError(
                 f"target_col={target_col!r} cần scores_csv, nhưng scores_csv=None. "
                 f"Truyền scores_csv=annotations/scores.csv, hoặc dùng "
-                f"target_col='dtw_distance_total' (đường legacy Tuần 4)."
+                f"target_col='dtw_distance_total' (đường legacy)."
             )
 
         if target_col in SELF_REFERENTIAL_TARGETS and use_dtw:
             logger.warning(
                 "⚠️  target_col=%r VÀ use_dtw=True: target này cũng nằm trong input "
                 "(kênh %d) → model tự tham chiếu, val_mae KHÔNG phải số "
-                "generalization. Đây là lỗi P2 của Tuần 4; chỉ dùng để reproduce.",
+                "generalization. Chỉ dùng khi cố ý đối chiếu lại cách cũ.",
                 target_col, DTW_INPUT_DIM - 1,
             )
 
@@ -588,19 +587,19 @@ def get_temporal_loaders(
     seed: int = 42,
 ) -> Tuple[DataLoader, DataLoader]:
     """
-    Factory LEGACY của Tuần 4 — giữ nguyên hành vi để reproduce được.
+    Factory LEGACY — giữ lại để đối chiếu, không dùng cho việc mới.
 
     ⚠️  Chia train/val bằng `random_split` trên **window**, nên window của cùng
     một video nằm cả hai phía → val_mae từ factory này KHÔNG phải số
-    generalization (lỗi P1, xem docs/temporal_week5.md). Dùng
+    generalization (xem docs/temporal_eval.md §1.1). Dùng
     `get_temporal_loaders_grouped()` cho mọi việc mới.
     """
     logger.warning(
         "⚠️  get_temporal_loaders(): random_split cấp window → leakage giữa các "
-        "window cùng video. Chỉ dùng để reproduce Tuần 4; việc mới dùng "
+        "window cùng video. Chỉ dùng để đối chiếu; việc mới dùng "
         "get_temporal_loaders_grouped()."
     )
-    # Khi không có scores_csv, Tuần 4 train trên dtw_distance_total.
+    # Không có scores_csv thì đường legacy train trên dtw_distance_total.
     target_col = "khop_nhip" if scores_csv else "dtw_distance_total"
     full_ds = TemporalSeqDataset(
         dtw_csv=dtw_csv,

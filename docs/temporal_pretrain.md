@@ -73,12 +73,12 @@ python -m src.temporal_dl.train train --run-name khopnhip_dtw_official
 ```
 *(Hệ thống sẽ tự quét tìm `checkpoints/temporal_pretrained.pt`)*
 
-Từ Tuần 5, lệnh `train` mặc định là `--target-col khop_nhip --split official`. Đường legacy của Tuần 4 (target `dtw_distance_total`, `random_split` cấp cửa sổ) cần nói rõ ý định — dùng cờ `--no-scores` chứ không phải `--scores-csv ""`, vì PowerShell nuốt chuỗi rỗng:
+Lệnh `train` mặc định là `--target-col khop_nhip --split official`. Đường legacy (target `dtw_distance_total`, `random_split` cấp cửa sổ — chỉ để đối chiếu, xem `docs/temporal_eval.md` §1) cần nói rõ ý định, và dùng cờ `--no-scores` chứ không phải `--scores-csv ""` vì PowerShell nuốt chuỗi rỗng:
 
 ```bash
 python -m src.temporal_dl.train train --no-scores \
   --target-col dtw_distance_total --allow-dtw-target --split random \
-  --epochs 30 --run-name week4_legacy_repro
+  --epochs 30 --run-name legacy_repro
 ```
 
 ## Ghi chú: cùng `window_frames` nhưng khác khoảng thời gian

@@ -5,7 +5,7 @@ KẾT LUẬN MỘT DÒNG: BiLSTM HỌC ĐƯỢC thứ dtw_distance_total không 
 (MAE giảm 0.892 điểm, p=0.006) — NHƯNG vẫn CHƯA thắng được baseline
 "trung bình theo bài" (p=0.17), nên chưa deployable.
 
-Phương pháp đầy đủ: docs/temporal_week5.md
+Phương pháp đầy đủ: docs/temporal_eval.md
 
 1) Scope
 --------
@@ -44,8 +44,8 @@ nó với val_keys và dừng nếu có phần tử chung:
     if bad and not allow:
         raise SystemExit(f"LEAKAGE: {len(bad)} val video nằm trong tập train ...")
 
-Checkpoint Tuần 4 (temporal_best.pth) không có trường đó nên bị từ chối —
-đúng ý, vì nó được train bằng random_split cấp cửa sổ. Đã kiểm chứng (S1).
+Checkpoint không mang trường đó thì không chứng minh được là không leakage,
+nên bị từ chối. Đã kiểm chứng (S1).
 
 4) Baseline trung thực — ĐỌC TRƯỚC MỌI SỐ CỦA MODEL
 ---------------------------------------------------
@@ -225,29 +225,7 @@ baseline hằng số (2.850); nếu còn "chạy tốt" là có feature dẫn t�
 mạnh nhất (1.954 -> 3.279), đúng như mong đợi với kịch bản mang nhiều tín
 hiệu thật nhất.
 
-10) ERRATUM Tuần 4 (lỗi P1 + P2)
----------------------------------
-Deliverable Tuần 4 là "model train chạy được, loss giảm" — điều đó ĐÚNG và
-experiments/temporal_dl/train_history.csv chứng minh (loss 0.009346 -> 0.006344
-qua 30 epoch).
-
-Nhưng con số val_mae = 0.0617 KHÔNG phải số generalization, vì:
-  (i)  split là random_split cấp CỬA SỔ, nên cửa sổ của cùng một video nằm cả
-       train lẫn val (1401 cửa sổ từ 229 video);
-  (ii) target là dtw_distance_total đã normalize, mà giá trị này cũng nằm trong
-       kênh 17 của input (qua _expand_dtw_to_frames) -> model tự tham chiếu.
-
-Lưu ý thêm: 0.0617 là đơn vị DTW ĐÃ NORMALIZE, KHÔNG quy đổi được sang thang
-điểm khop_nhip — hai đại lượng khác nhau hoàn toàn. Con số cùng loại, hợp lệ,
-đầu tiên là val_mae_video_raw = 1.862 điểm của encoder (c) Tuần 5.
-
-Tuần 5 cung cấp số generalization hợp lệ đầu tiên. File Tuần 4 giữ nguyên không
-sửa một byte; run Tuần 5 ghi ra tên temporal_khopnhip_* riêng nhờ --run-name.
-
-Cả hai lỗi nay bị chặn bằng code: xem docs/temporal_week5.md §1 và sanity check
-S1-S7. Chủ động viết ra mạnh hơn nhiều so với để người phản biện tìm thấy.
-
-11) CAVEAT — khop_nhip không phải điểm chuyên gia
+10) CAVEAT — khop_nhip không phải điểm chuyên gia
 --------------------------------------------------
 Cột khop_nhip trong annotations/scores.csv trùng BYTE-FOR-BYTE với score_rhythm
 trong annotations/demo_source/labels_auto.csv, mà cột notes của file đó ghi
@@ -267,7 +245,7 @@ Thay cột này bằng điểm người chấm thật là tiền đề cho mọi
 thuận với con người, và là việc dữ liệu đáng làm nhất của Tuần 6. Lưu ý
 annotations/demo_source/ bị .gitignore loại — đó là lý do điều này dễ bị bỏ sót.
 
-12) CAVEAT — dataset chứa chính video reference như một performer
+11) CAVEAT — dataset chứa chính video reference như một performer
 -----------------------------------------------------------------
 poses/dance_001/D01_P003_T01.npy GIỐNG HỆT TỪNG BYTE dance_001_ref.npy
 (cùng 312 frame, geometry allclose tuyệt đối). Nó được chấm 100/100/100/300 và
@@ -285,7 +263,7 @@ Video này nằm trong split train nên metric trên tập val không bị ảnh
 Có nên loại nó khỏi scores.csv hay không là quyết định của cả nhóm (file nhãn
 thuộc Person 3); Person 2 chỉ nêu.
 
-13) GHI CHÚ — flag_ratio là đại lượng TRONG video, không phải lỗi rule engine
+12) GHI CHÚ — flag_ratio là đại lượng TRONG video, không phải lỗi rule engine
 ------------------------------------------------------------------------------
 flag_ratio (tỉ lệ đoạn bị flag_suspicious_segments gắn cờ) có Pearson với
 khop_nhip chỉ -0.078 (n=217).
@@ -316,7 +294,7 @@ CÁI BẪY CẦN TRÁNH KHI ĐỌC BẢNG CORRELATION: đem một công cụ đo
 thành "công cụ bị hỏng, cần hiệu chỉnh ngưỡng". Dòng flag_ratio trong
 correlation_khop_nhip.csv phải đọc theo đúng nghĩa đó.
 
-14) CAVEAT — power thống kê
+13) CAVEAT — power thống kê
 ----------------------------
 Split official: n_val = 34, SE(MAE) ~ 0.45 điểm. Chênh lệch dưới ~1 điểm giữa
 các kịch bản KHÔNG phân định được trên một split -> đó là lý do có bảng CV và
@@ -326,7 +304,7 @@ Bản thân bảng CV cũng chỉ có 5 fold, nên các kiểm định t có df=
 Các kết luận "KHÔNG có ý nghĩa" ở mục 6 nên đọc là "chưa đủ bằng chứng ở quy
 mô này", không phải "đã chứng minh là không có khác biệt".
 
-15) API fusion (deliverable Tuần 5)
+14) API fusion (deliverable Tuần 5)
 -----------------------------------
    from src.temporal_dl import load_temporal_checkpoint, temporal_model
    model, ckpt = load_temporal_checkpoint(
@@ -346,9 +324,9 @@ Checkpoint khuyến nghị cho fusion: temporal_khopnhip_dtw_official.pth
 Khi fusion, GIỮ NGUYÊN cơ chế assert leakage: checkpoint mang config.train_videos
 và phải kiểm tra nó không giao với tập eval của fusion.
 
-16) Sanity check đã chạy
+15) Sanity check đã chạy
 -------------------------
-   S1  guard leakage nổ thật khi truyền temporal_best.pth (Tuần 4)   ĐẠT
+   S1  guard leakage nổ thật với checkpoint thiếu config.train_videos  ĐẠT
    S2  split rời nhau, in mỗi lần chạy: key_overlap=0 person_overlap=0  ĐẠT
    S3  không cửa sổ nào nằm cả hai phía                              ĐẠT
    S4  guard target tự tham chiếu exit 1                             ĐẠT
@@ -362,7 +340,7 @@ và phải kiểm tra nó không giao với tập eval của fusion.
    Baseline global-mean -> MAE 2.850 RMSE 3.787                          KHỚP
    Baseline dance-mean  -> MAE 1.902 RMSE 2.650                          KHỚP
 
-17) Manifest artifact
+16) Manifest artifact
 ----------------------
 experiments/temporal_dl/
    ablation_xgb_khop_nhip.csv              bảng official 183/34
@@ -390,5 +368,5 @@ experiments/temporal_dl/
    *.pth (12 checkpoint) bị .gitignore loại — sinh lại bằng 2 lệnh train
    + vòng foreach 5 fold trong HUONG-DAN-CHAY.md §8b.
 
-KHÔNG ĐỔI (deliverable Tuần 4, đã trên main):
+KHÔNG ĐỔI (kết quả train trước đó, đã trên main):
    train_history.csv, pretrain_history.csv, temporal_best.pth

@@ -1,4 +1,4 @@
-# Tuần 5 Person 2 — Phương pháp (Temporal DL vs DTW)
+# Person 2 — Phương pháp (Temporal DL vs DTW)
 
 File này giải thích **cách đo** và **tại sao đo như vậy**.
 Kết quả số nằm ở `experiments/temporal_dl/week5_results.txt`.
@@ -13,7 +13,7 @@ Tuần 5 của Person 2 phải giao đúng 3 thứ:
 
 ## 0. Vì sao thiết kế như vậy
 
-Mục này ghi lại lý do đứng sau từng quyết định kỹ thuật của Tuần 4–5 (và phần kế thừa từ Tuần 2–3), để người review không phải đoán. Mỗi tiểu mục theo cùng một khuôn: **vấn đề → chọn gì → đã loại phương án nào và vì sao**.
+Mục này ghi lại lý do đứng sau từng quyết định kỹ thuật của nhánh Temporal, để người review không phải đoán. Mỗi tiểu mục theo cùng một khuôn: **vấn đề → chọn gì → đã loại phương án nào và vì sao**.
 
 ### 0.1 Vì sao bài toán cần *cả* DTW lẫn Deep Learning
 
@@ -94,7 +94,7 @@ Nhóm theo `person_id` đảm bảo mọi video của một người nằm trọ
 
 Đã loại: KFold thường (leakage như trên); nhóm theo `dance_id` (chỉ 12 bài nên mỗi fold quá to, và nó trả lời câu hỏi khác — "tổng quát sang *bài* mới", vốn là thí nghiệm held-out-dance của Tuần 6).
 
-Đây cũng chính là lỗi P1 của Tuần 4 ở một dạng khác: ở đó là cửa sổ cùng video nằm hai phía, ở đây là video cùng người nằm hai phía.
+Đây là cùng một cạm bẫy với việc chia ở cấp cửa sổ (§1.1), chỉ ở một tầng khác: ở đó là cửa sổ cùng video nằm hai phía, ở đây là video cùng người nằm hai phía.
 
 ### 0.9 Vì sao kiểm định t ghép cặp, không nhìn hai khoảng mean ± std
 
@@ -116,22 +116,38 @@ Nên quy tắc là: báo cả hai, và khi hai con số lệch nhau nhiều thì
 
 ---
 
-## 1. Hai lỗi phương pháp của Tuần 4 phải sửa trước
+## 1. Hai quy tắc bắt buộc về dữ liệu
 
-Tuần 5 không thể xây trực tiếp lên checkpoint Tuần 4, vì:
+Hai quy tắc dưới đây quyết định việc mọi con số đo được có ý nghĩa hay không. Cả hai đều **được chặn bằng code**, không dựa vào quy ước — vì cả hai đều rất dễ vi phạm mà không nhận ra.
 
-**P1 — leakage train/val.** `get_temporal_loaders()` gọi `random_split` trên **từng cửa sổ**. `TemporalSeqDataset` phát 1 sample cho mỗi cửa sổ 60 frame (1401 cửa sổ từ 229 video), nên cửa sổ của cùng một video nằm cả hai phía. Con số `val_mae=0.0617` của Tuần 4 vì thế **không phải** số generalization.
+### 1.1 Chia train/val ở cấp video, nhóm theo `person_id`
 
-**P2 — target tự tham chiếu.** `train_temporal` chạy với `--scores-csv` mặc định `None`, nên dataset rơi về `target = dtw_distance_total` (min-max normalize). Nhưng giá trị này cũng nằm trong **kênh 17 của input** (qua `_expand_dtw_to_frames`). Model học chính đầu vào của nó.
+`TemporalSeqDataset` phát **một sample cho mỗi cửa sổ 60 frame**, nên một video cho 3–11 sample. Nếu chia ngẫu nhiên ở cấp sample thì cửa sổ của cùng một video rơi về cả hai phía — mà các cửa sổ liền kề của cùng một người, cùng một bài, cùng một lần quay thì gần như giống hệt nhau. Khi đó `val_mae` đo khả năng **nhớ**, không phải khả năng tổng quát.
 
-Cả hai đã được sửa và **chặn bằng code**, không bằng quy ước:
+Thêm một tầng nữa: 20 người nhảy 217 video, nên một người xuất hiện ở nhiều bài. Không nhóm theo `person_id` thì model học được "người P007 thường được chấm khoảng 74 điểm" và ăn điểm mà chẳng học cách đánh giá chuyển động.
 
-| Lỗi | Cách chặn tái diễn |
-|---|---|
-| P1 | `get_temporal_loaders_grouped()` chia ở **cấp video**; assert video và person rời nhau; assert không cửa sổ nào nằm cả hai phía. Factory cũ giữ lại để reproduce nhưng log cảnh báo. |
-| P2 | `train.py` `SystemExit` nếu `target_col="dtw_distance_total"` và `use_dtw=True`, trừ khi truyền `--allow-dtw-target`. Dataset không còn fallback âm thầm: thiếu nhãn thì **bỏ video**, không lặng lẽ đổi target. |
+Nên quy tắc là: **mọi cửa sổ của một video, và mọi video của một người, phải nằm trọn một phía.**
 
-Deliverable Tuần 4 (*"model train chạy được, loss giảm"*) vẫn đúng và `experiments/temporal_dl/train_history.csv` chứng minh điều đó — file đó **không bị sửa**. Các run Tuần 5 ghi ra tên `temporal_khopnhip_*` riêng.
+Thực thi: `split_video_indices()` chia ở cấp video; `get_temporal_loaders_grouped()` mở ra cấp cửa sổ rồi assert không cửa sổ nào nằm hai phía. Mỗi lần chạy in ra `key_overlap=0 person_overlap=0`.
+
+### 1.2 Target không được nằm trong input
+
+`dtw_distance_total` vừa là một feature hữu ích, vừa là thứ được tile ra thành **kênh thứ 17 của input** (qua `_expand_dtw_to_frames`). Nếu lấy chính nó làm target thì model chỉ cần học đọc lại kênh 17 — loss giảm rất đẹp và con số thu được không nói gì về bài toán thật.
+
+Nên: target mặc định là `khop_nhip` từ `annotations/scores.csv`, và `train.py` **`SystemExit`** nếu ai đó đặt `target_col="dtw_distance_total"` trong khi `use_dtw=True`, trừ khi truyền `--allow-dtw-target` để nói rõ là cố ý.
+
+Đi kèm là một quy tắc nhỏ nhưng quan trọng: **không có fallback âm thầm.** Thiếu nhãn thì video bị **bỏ** và ghi log số lượng, chứ dataset không tự đổi sang một target khác.
+
+### 1.3 Số đo phải đúng đơn vị
+
+`val_mae` tính trên cửa sổ và ở thang đã normalize — **không so được** với baseline. History vì vậy ghi thêm:
+
+- `val_mae_raw` = `val_mae × (tmax − tmin)`, quy về điểm thật;
+- `val_mae_video_raw` = gộp prediction các cửa sổ theo video rồi mới tính MAE ở thang gốc.
+
+`val_mae_video_raw` là số duy nhất đặt cạnh được baseline ở §4, và là số nên trích dẫn.
+
+> Cùng cạm bẫy ở §1.1 còn tái xuất ở **tầng embedding**, nơi nó khó thấy hơn nhiều — xem §3.
 
 ---
 
@@ -160,7 +176,7 @@ Deliverable Tuần 4 (*"model train chạy được, loss giảm"*) vẫn đúng
 
 ## 3. Quy tắc chống leakage encoder
 
-Đây là cạm bẫy tinh vi nhất của tuần, và nó là chính lỗi P1 tái diễn ở một tầng trừu tượng cao hơn — khó phát hiện hơn nhiều.
+Đây là cạm bẫy tinh vi nhất của phần đánh giá: chính quy tắc §1.1 tái xuất ở một tầng trừu tượng cao hơn, và ở đó khó phát hiện hơn nhiều.
 
 Embedding **là một hàm đã fit vào nhãn `khop_nhip`**. Nếu một video từng nằm trong tập train của encoder thì vector 64 chiều của nó đã hấp thụ nhãn của chính nó. Đưa vào XGBoost rồi eval trên đó là đo memorization, không phải generalization.
 
@@ -170,7 +186,7 @@ Thực thi:
 
 1. Cả hai encoder train với `--split official`, tức chỉ trên 183 video của `scores_train.csv`. 34 video test không bị chạm tới — kể cả khi tính min/max để normalize target.
 2. `eval_temporal_xgb.py` chạy trên đúng split đó, nên hàng val của XGBoost **chính là** tập video encoder chưa từng thấy.
-3. **Assert, không giả định.** Checkpoint mang theo `config.train_videos`; script giao nó với `val_keys` và dừng nếu có phần tử chung. Checkpoint không có trường đó — ví dụ checkpoint Tuần 4 — cũng bị từ chối. Đây là cái chặn quan trọng nhất cho fusion Tuần 6.
+3. **Assert, không giả định.** Checkpoint mang theo `config.train_videos`; script giao nó với `val_keys` và dừng nếu có phần tử chung. Checkpoint không mang trường đó thì không chứng minh được là không leakage, nên cũng bị từ chối. Đây là cái chặn quan trọng nhất cho fusion Tuần 6.
 4. Trong `corr_temporal_khop_nhip.py`, cột `in_sample` đánh dấu mọi đại lượng dẫn từ embedding trên split `train`/`all`. **Chỉ dòng `in_sample=False` được dùng làm bằng chứng.** Để nó là một cột thay vì một footnote là cách ngăn con số bị trích dẫn sai ở Tuần 6.
 
 ---
@@ -226,7 +242,7 @@ Các sanity check được cài sẵn trong code:
 
 | Mã | Kiểm tra | Cơ chế |
 |---|---|---|
-| S1 | Guard leakage nổ thật | truyền `temporal_best.pth` (Tuần 4) → exit 1, *"thiếu config.train_videos"* |
+| S1 | Guard leakage nổ thật | truyền một checkpoint không có `config.train_videos` → exit 1 |
 | S2 | Split rời nhau | in và assert mỗi lần chạy: `key_overlap=0 person_overlap=0` |
 | S3 | Không cửa sổ nào ở cả hai phía | assert trong `get_temporal_loaders_grouped` |
 | S4 | Guard target tự tham chiếu | `--target-col dtw_distance_total` không kèm `--allow-dtw-target` → exit 1 |
