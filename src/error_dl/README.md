@@ -27,3 +27,25 @@ DTW chỉ báo “đoạn này khác thường”, **không** biết là lỗi g
 | `rule_engine.py` | Baseline, **không phải DL** |
 
 **Deliverable:** API `error_model(diff_sequence_windowed) -> error_probabilities, error_embedding`. Tuần 7 Person 3 chủ trì prompt LLM vì hiểu cấu trúc lỗi rõ nhất.
+
+## Chạy (tuần 4)
+
+Từ gốc repo. Cửa sổ 2 giây, bước 1 giây (cùng `suggestions.csv`). Nhãn là vector 5 bit từ `error_labels.csv`: một loại được bật khi giao với cửa sổ lớn hơn nửa đoạn ngắn hơn (nhiều loại trên cùng một đoạn vẫn bật cùng lúc).
+
+```text
+python -m src.error_dl.train
+python -m src.error_dl.train --encoder mlp
+python -m src.error_dl.train --smoke
+python -m src.error_dl.eval
+python -m src.error_dl.eval --smoke
+```
+
+`train` đọc `poses/diffs/{dance_id}/{video_id}_diff.npy`. Checkpoint: `experiments/error_dl/error_model_best.pt`.
+
+`eval` ghi `per_error_metrics.csv` (Precision / Recall / F1 từng loại, DL và rule DTW) và `error_embeddings.csv` (một vector 10 chiều mỗi video: mean rồi max theo 5 loại).
+
+`--smoke` dùng khi chưa có file `.npy`: sinh diff giả trong bộ nhớ (mỗi loại lỗi một cụm khớp) để kiểm tra vòng train và bảng so sánh, không ghi vào `poses/diffs`.
+
+```python
+probs, error_embedding = error_model(windows, model)  # (N, 5), (10,)
+```
