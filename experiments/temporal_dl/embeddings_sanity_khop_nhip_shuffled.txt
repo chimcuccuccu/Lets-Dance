@@ -1,0 +1,13 @@
+Sanity check embedding — Person 2 Tuần 5
+============================================
+
+(c) encoder 17-ch: 217 video × 64 chiều
+  std theo chiều: min=0.000e+00 median=9.614e-02 max=5.126e-01
+  chiều chết (std < 1e-6): 6/64
+  ‖emb‖₂: mean=4.223
+
+(b) encoder 16-ch: 217 video × 64 chiều
+  std theo chiều: min=0.000e+00 median=5.152e-02 max=5.230e-01
+  chiều chết (std < 1e-6): 16/64
+  ‖emb‖₂: mean=4.804
+

@@ -1,0 +1,378 @@
+Person 2 — Tuần 5 results (Temporal DL + DTW ablation)
+======================================================
+
+KẾT LUẬN MỘT DÒNG: BiLSTM HỌC ĐƯỢC thứ dtw_distance_total không mã hoá
+(MAE giảm 0.892 điểm, p=0.006) — NHƯNG vẫn CHƯA thắng được baseline
+"trung bình theo bài" (p=0.17), nên chưa deployable.
+
+Phương pháp đầy đủ: docs/temporal_eval.md
+
+1) Scope
+--------
+Chỉ Person 2 (geometry / dtw / temporal_dl). Không sửa file của Person 1 & 3;
+chỉ đọc output của họ (poses/, annotations/*.csv).
+
+File này báo cáo deliverable TUẦN 5: bảng 3 kịch bản (a)/(b)/(c) qua một
+XGBoost tạm, correlation Pearson/Spearman với khop_nhip, và API
+temporal_model(). Artifact của TUẦN 4 (train_history.csv, pretrain_history.csv,
+temporal_best.pth) giữ nguyên không sửa một byte — run của Tuần 5 ghi ra tên
+temporal_khopnhip_* riêng nhờ --run-name.
+
+2) Protocol
+-----------
+- Target: khop_nhip (0-100)
+- Split chính: official 183/34, rời nhau theo person_id
+    train = 16 person, val = 4 person (P001, P002, P016, P018)
+- Split phụ: GroupKFold 5 fold theo person_id  <- BẢNG ĐỂ TRÍCH DẪN
+- Cửa sổ: 60 frame (~2s @ 30fps); hop 60 lúc train, hop 30 lúc infer
+- Gộp cửa sổ -> video: mean (+) std = 64 chiều
+- Giảm chiều: StandardScaler -> PCA(32), fit CHỈ trên hàng train
+- XGBoost: hyperparameter copy nguyên văn từ scripts/eval_spatial_xgb.py
+  (Person 1), để hai bảng so sánh được với nhau
+- Normalize target: min/max của tập TRAIN (63.0 -> 100.0)
+
+3) Quy tắc chống leakage encoder
+--------------------------------
+Embedding là một hàm đã fit vào nhãn khop_nhip. Nếu một video từng nằm trong
+tập train của encoder thì vector của nó đã hấp thụ nhãn của chính nó; đưa vào
+XGBoost rồi eval trên đó là đo memorization, không phải generalization.
+
+QUY TẮC: tập video train của encoder phải là TẬP CON của hàng train XGBoost.
+Cả hai encoder (17-ch và 16-ch) chỉ train trên 183 video của scores_train.csv.
+34 video test không bị chạm tới, kể cả khi tính min/max để normalize target.
+
+Được enforce bằng code — checkpoint mang config.train_videos, eval script giao
+nó với val_keys và dừng nếu có phần tử chung:
+
+    if "train_videos" not in cfg:
+        raise SystemExit(f"{name}: checkpoint thiếu config.train_videos ...")
+    bad = set(map(tuple, cfg["train_videos"])) & set(val_keys)
+    if bad and not allow:
+        raise SystemExit(f"LEAKAGE: {len(bad)} val video nằm trong tập train ...")
+
+Checkpoint không mang trường đó thì không chứng minh được là không leakage,
+nên bị từ chối. Đã kiểm chứng (S1).
+
+4) Baseline trung thực — ĐỌC TRƯỚC MỌI SỐ CỦA MODEL
+---------------------------------------------------
+khop_nhip: mean 76.82, std 4.11, range [63, 100]; mean theo bài trải 72.4-80.0.
+
+   Bộ dự đoán                    MAE      RMSE    (split official 183/34)
+   hằng số = mean train          2.850    3.787
+   mean theo dance_id            1.902    2.650    <- VẠCH THẬT
+
+Vì label có spread nhỏ, MAE tuyệt đối gần như vô nghĩa nếu không so với 2
+baseline này. Một model đạt MAE 2.6 nghe có vẻ tốt trên thang 0-100 nhưng vẫn
+thua dự đoán "trung bình của bài này".
+
+5) Bảng 3 kịch bản
+------------------
+
+5a) Split official 183/34 (n_val = 34)  — THAM KHẢO, KHÔNG PHẢI BẢNG CHÍNH
+
+   setup                             #f     MAE    RMSE      R2       r
+   Baseline global-mean               0   2.850   3.787  -0.058     nan
+   Baseline dance-mean                0   1.902   2.650   0.482   0.726
+   Baseline khop_dong_tac (oracle)    1   2.279   2.949   0.358   0.617  [không deployable]
+   (a) DTW-only                       4   2.628   3.450   0.121   0.423
+   (a+) DTW-only extended             8   1.917   2.680   0.470   0.694  [xem mục 8]
+   (b) LSTM-only                     32   2.093   2.876   0.390   0.661
+   (c-) DTW+LSTM, no-dtw encoder     32   2.181   2.998   0.337   0.591
+   (c) DTW+LSTM                      32   1.954   2.552   0.519   0.731
+   Geometry-only (no DL)             32   2.841   3.541   0.074   0.409
+   (a) DTW-only +dance               16   2.199   2.843   0.403   0.640
+   (a+) DTW-only extended +dance     20   1.968   2.797   0.422   0.654
+   (b) LSTM-only +dance              32   2.433   3.030   0.322   0.602
+   (c) DTW+LSTM +dance               32   1.741   2.390   0.579   0.785
+
+5b) GroupKFold 5 fold theo person_id  — BẢNG ĐỂ TRÍCH DẪN
+
+   setup                              MAE_mean  +/- std   RMSE_mean     R2
+   (c) DTW+LSTM                          2.306   0.218       3.275   0.318
+   (c) DTW+LSTM +dance                   2.401   0.253       3.324   0.296
+   (b) LSTM-only +dance                  2.474   0.277       3.515   0.215
+   (c-) DTW+LSTM, no-dtw encoder         2.517   0.219       3.525   0.203
+   Baseline dance-mean                   2.530   0.333       3.400   0.270
+   (a) DTW-only +dance                   2.545   0.464       3.595   0.161
+   (b) LSTM-only                         2.618   0.114       3.688   0.124
+   (a+) DTW-only extended +dance         2.681   0.360       3.790   0.065
+   Baseline khop_dong_tac (oracle)       2.691   0.258       3.558   0.162
+   (a+) DTW-only extended                2.891   0.199       4.108  -0.098
+   Baseline global-mean                  3.071   0.419       4.034  -0.022
+   Geometry-only (no DL)                 3.147   0.176       4.103  -0.072
+   (a) DTW-only                          3.198   0.503       4.411  -0.266
+
+VÌ SAO BẢNG CV MỚI LÀ BẢNG CHÍNH:
+n_val của split official chỉ 34 -> SE(MAE) ~ 0.45 điểm, lớn hơn phần lớn
+chênh lệch trong bảng 5a. Hai bảng mâu thuẫn nhau ở hai chỗ, và CV đúng:
+  - 5a: (c)+dance đạt 1.741 < dance-mean 1.902 -> "model thắng baseline"
+    CV : one-hot dance thực ra làm TỆ ĐI (2.401 vs 2.306, p=0.24)
+  - 5a: (a+) đạt 1.917, gần bằng dance-mean
+    CV : (a+) chỉ 2.891, tệ hơn cả (b) lẫn (c)  [xem mục 8]
+=> KHÔNG được lấy con số 1.741 làm headline.
+
+6) VERDICT — "DL có học thêm gì ngoài DTW không?"
+-------------------------------------------------
+Kiểm định t ghép cặp trên 5 fold (các fold dùng chung tập val cho mọi setup,
+nên ghép cặp khử được yếu tố "fold khó thì mọi setup đều tệ" — mạnh hơn nhiều
+so với việc nhìn hai khoảng mean±std phủ nhau).
+Chi tiết: experiments/temporal_dl/ablation_paired_tests_khop_nhip.csv
+
+   so sánh (dMAE dương = vế sau tốt hơn)              dMAE      t       p
+   (a) DTW-only           -> (c) DTW+LSTM           +0.892   5.28  0.0062  CÓ Ý NGHĨA
+   (a) DTW-only           -> (b) LSTM-only          +0.580   2.86  0.0458  CÓ Ý NGHĨA
+   (c-) không kênh dtw    -> (c) có kênh dtw        +0.211   2.40  0.0743  giáp ranh
+   Baseline dance-mean    -> (c) DTW+LSTM           +0.224   1.65  0.1742  KHÔNG
+   Baseline global-mean   -> (c) DTW+LSTM           +0.765   5.48  0.0054  CÓ Ý NGHĨA
+   Geometry-only          -> (c) DTW+LSTM           +0.841  12.99  0.0002  CÓ Ý NGHĨA
+   oracle khop_dong_tac   -> (c) DTW+LSTM           +0.385   2.89  0.0447  CÓ Ý NGHĨA
+   (c) DTW+LSTM           -> (c)+dance              -0.095  -1.37  0.2421  KHÔNG
+   (a) DTW-only           -> (a+) DTW-only extended +0.307   1.87  0.1343  KHÔNG
+
+KẾT LUẬN HAI VẾ — phải viết cả hai, không được chỉ lấy vế 1:
+
+  VẾ 1 (CÓ). BiLSTM học được thứ dtw_distance_total không mã hoá.
+  MAE giảm 0.892 điểm, tức 28% so với (a) DTW-only, p=0.006. Ngay cả
+  (b) LSTM-only — hoàn toàn không thấy kênh DTW — cũng hơn (a) 0.580 điểm
+  (p=0.046). Đây là câu trả lời trực tiếp cho câu hỏi của Tuần 5, và nó
+  biện minh cho việc có một nhánh Deep Learning thay vì chỉ dùng DTW.
+
+  VẾ 2 (NHƯNG). Chưa thắng được baseline "trung bình theo bài".
+  (c) đạt 2.306 so với dance-mean 2.530; chênh lệch 0.224 với p=0.17 —
+  không đủ bằng chứng. Nghĩa là phần lớn phương sai của khop_nhip vẫn là
+  ĐỘ KHÓ CỦA BÀI chứ không phải năng lực người nhảy, và model chưa dùng
+  được để chấm điểm thực tế.
+
+  Ghi chú về kênh dtw trong input: (c-) vs (c) cho thấy việc đưa dtw vào
+  làm kênh thứ 17 giúp thêm 0.211 điểm nhưng p=0.074 — chưa đủ bằng chứng.
+  Phần lớn lợi ích của (c) so với (a) đến từ bản thân BiLSTM, không phải
+  từ việc ghép DTW vào input.
+
+7) Correlation với khop_nhip (per-video)
+----------------------------------------
+7a) DTW và sub-score (không dẫn từ embedding, dùng được ở mọi split)
+
+                                n      Pearson   Spearman
+   dtw_distance_total @ all    217     -0.4419    -0.3764   (p < 1e-11)
+   dtw_distance_total @ train  183     -0.4413    -0.3662
+   dtw_distance_total @ val     34     -0.3998    -0.3945
+   dtw_seg_mean @ all          217     -0.4646    -0.4074
+   dtw_seg_min  @ all          217     -0.4848    -0.4187   <- mạnh nhất
+   dtw_seg_max  @ all          217     -0.3807    -0.3142
+   dtw_seg_std  @ all          217     -0.2364    -0.2247
+   flag_ratio   @ all          217     -0.0776    -0.0570   <- xem mục 11
+   khop_dong_tac @ all         217     +0.6830    +0.6419
+   nang_luong   @ all          217     +0.2771    +0.2880
+   tong_diem    @ all          217     +0.7633    +0.7422
+
+Dấu đúng: DTW lớn => nhịp tệ hơn.
+dtw_seg_min tương quan MẠNH HƠN cả dtw_distance_total (-0.485 vs -0.442).
+Đáng cân nhắc khi thiết kế feature cho fusion Tuần 6.
+
+7b) Đại lượng dẫn từ embedding — CHỈ dòng split=val (in_sample=False) được
+    dùng làm bằng chứng; encoder đã thấy nhãn của hàng train.
+
+                                 n      Pearson   Spearman
+   temporal_pred_score  @ val    34     +0.7108    +0.8155
+   temporal_emb_pc1     @ val    34     -0.7595    -0.8340
+   temporal_emb_pc1_nodtw @ val  34     -0.7987    -0.8036
+   temporal_emb_l2norm  @ val    34     -0.7107    -0.8223
+   (tham chiếu) tong_diem @ val  34     +0.7605    +0.7852
+   (tham chiếu) khop_dong_tac    34     +0.6983    +0.7056
+
+   Per-dimension @ val: best |r| = 0.778; 29/64 chiều qua được BH-FDR q<0.05.
+   (64 test ở alpha=0.05 sinh ~3 dương tính giả theo cấu trúc, nên bắt buộc
+    hiệu chỉnh FDR; 29/64 là con số sau hiệu chỉnh.)
+
+BA ĐIỀU PHẢI NÊU KÈM, nếu không bảng 7b bị đọc quá lạc quan:
+
+  (i)  Correlation trên val (0.71-0.80) CAO HƠN trên train (0.65-0.68).
+       Đây là điều bất thường — model không thể tổng quát tốt hơn chỗ nó
+       được fit. Gần như chắc chắn là nhiễu của n=34 với đúng 4 person.
+       Đừng diễn giải như "model tổng quát tốt".
+
+  (ii) temporal_emb_l2norm một mình đạt Spearman -0.822, gần bằng cả PC1
+       (-0.834). Tức phần lớn tín hiệu nằm ở ĐỘ LỚN của embedding — model
+       học một thang "chất lượng" khá thô chứ không phải cấu trúc nhịp
+       phong phú. Hạ kỳ vọng về mức tinh vi của biểu diễn đã học.
+
+  (iii) temporal_pred_score đạt Spearman 0.8155, CAO HƠN cả tong_diem
+       (0.785) — model xếp hạng video tốt hơn chính điểm tổng của người
+       chấm. Đây là kết quả tốt thật và đáng nêu trong báo cáo.
+
+8) CẢNH BÁO — dòng (a+) DTW-only extended gây hiểu nhầm
+-------------------------------------------------------
+Trên split official nó đạt MAE 1.917, gần bằng dance-mean 1.902, dễ bị đọc
+thành "chỉ cần thêm vài feature DTW là đủ, không cần DL".
+
+Trên CV nó chỉ đạt 2.891 — tệ hơn cả (b) 2.618 lẫn (c) 2.306, và so với (a)
+thì p=0.13 (không có ý nghĩa).
+
+Nguyên nhân gần như chắc chắn: (a+) thêm feature T (số frame của video), mà
+độ dài video gắn chặt với dance_id. Nó đang gián tiếp mã hoá "đây là bài nào"
+chứ không đo nhịp. Đúng kiểu feature chỉ hoạt động trên một split cụ thể.
+KHÔNG đọc dòng này như thắng lợi của DTW.
+
+9) CONTROL S5 — nhãn xáo (bằng chứng không có đường rò thông tin)
+-----------------------------------------------------------------
+Xáo khop_nhip TRONG hàng train rồi fit lại. Mọi kịch bản phải tụt về mức
+baseline hằng số (2.850); nếu còn "chạy tốt" là có feature dẫn từ nhãn.
+
+   setup                          MAE thật -> MAE nhãn xáo     r (xáo)
+   (c) DTW+LSTM                      1.954 ->   3.279          -0.163
+   (b) LSTM-only                     2.093 ->   2.700          +0.185
+   (c-) DTW+LSTM, no-dtw encoder     2.181 ->   3.412          -0.011
+   (a) DTW-only                      2.628 ->   2.679          +0.178
+   (a+) DTW-only extended            1.917 ->   2.945          +0.052
+   Baseline dance-mean               1.902 ->   3.227          -0.322
+   Geometry-only (no DL)             2.841 ->   3.235          +0.039
+
+ĐẠT. Mọi kịch bản tụt về hoặc tệ hơn 2.850, mọi |r| < 0.33. Riêng (c) tụt
+mạnh nhất (1.954 -> 3.279), đúng như mong đợi với kịch bản mang nhiều tín
+hiệu thật nhất.
+
+10) CAVEAT — khop_nhip không phải điểm chuyên gia
+--------------------------------------------------
+Cột khop_nhip trong annotations/scores.csv trùng BYTE-FOR-BYTE với score_rhythm
+trong annotations/demo_source/labels_auto.csv, mà cột notes của file đó ghi
+"auto". `grep -r score_rhythm` không ra script sinh nào trong src/ hay scripts/.
+
+Quy trình chấm điểm của nhóm yêu cầu điểm do người biết nhảy / dạy nhảy chấm.
+Vậy MỌI correlation trong file này là correlation với một nhãn auto chưa rõ
+nguồn gốc, KHÔNG phải với đánh giá của con người.
+
+Thêm bối cảnh: corr(khop_nhip, khop_dong_tac) = 0.683 và
+corr(khop_nhip, tong_diem) = 0.763 — tức ~47% phương sai của nhãn "khớp nhịp"
+đã nằm trong điểm "khớp động tác". Nhãn này mang rất ít thông tin nhịp độc lập,
+nên trần hiệu năng của bất kỳ model nhịp nào cũng bị giới hạn từ phía dữ liệu.
+Đây cũng là một cách giải thích vì sao vế 2 của verdict (mục 6) chưa đạt.
+
+Thay cột này bằng điểm người chấm thật là tiền đề cho mọi claim về mức đồng
+thuận với con người, và là việc dữ liệu đáng làm nhất của Tuần 6. Lưu ý
+annotations/demo_source/ bị .gitignore loại — đó là lý do điều này dễ bị bỏ sót.
+
+11) CAVEAT — dataset chứa chính video reference như một performer
+-----------------------------------------------------------------
+poses/dance_001/D01_P003_T01.npy GIỐNG HỆT TỪNG BYTE dance_001_ref.npy
+(cùng 312 frame, geometry allclose tuyệt đối). Nó được chấm 100/100/100/300 và
+có dtw_distance_total = 0.
+
+Một điểm duy nhất này chiếm 1/4 giá trị Pearson:
+
+   n=217 (đầy đủ)           r = -0.4419   rho = -0.3764
+   n=216 (bỏ self-compare)  r = -0.3349   rho = -0.3677
+
+Spearman gần như không đổi vì dựa trên hạng -> đó là con số bền vững hơn ở đây.
+Báo cáo ghi CẢ HAI, không chọn con số đẹp hơn.
+
+Video này nằm trong split train nên metric trên tập val không bị ảnh hưởng.
+Có nên loại nó khỏi scores.csv hay không là quyết định của cả nhóm (file nhãn
+thuộc Person 3); Person 2 chỉ nêu.
+
+12) GHI CHÚ — flag_ratio là đại lượng TRONG video, không phải lỗi rule engine
+------------------------------------------------------------------------------
+flag_ratio (tỉ lệ đoạn bị flag_suspicious_segments gắn cờ) có Pearson với
+khop_nhip chỉ -0.078 (n=217).
+
+CON SỐ ĐÓ ĐÚNG NHƯ DỰ ĐOÁN, KHÔNG PHẢI DẤU HIỆU RULE ENGINE HỎNG.
+run_dtw_all.py gọi flag_suspicious_segments(win_dists) cho TỪNG video, ngưỡng
+mean + 1.5*std tính trên CHÍNH các đoạn của video đó. Vậy nó là thang tương đối
+trong nội bộ một video, không phải thang tuyệt đối giữa các video.
+
+Hệ quả toán học: với gần như mọi dạng phân phối, tỉ lệ điểm vượt mean + 1.5*sigma
+xấp xỉ 6-7%. Thực tế khớp: 224 cờ trên ~3085 đoạn = 7.3% (lý thuyết phân phối
+chuẩn ~ 6.7%). Tức flag_ratio gần như là HẰNG SỐ theo thiết kế, nên về nguyên
+tắc nó không thể tương quan mạnh với một điểm tổng hợp cho cả video.
+
+Nó đo ĐỘ KHÔNG ĐỒNG ĐỀU, không đo ĐỘ TỆ:
+  - người nhảy tệ đều      -> mean cao, std thấp -> ÍT cờ
+  - người nhảy tốt, trượt 1 đoạn -> đoạn đó vượt ngưỡng -> CÓ cờ
+
+Đó đúng là mục đích đã ghi trong docstring của hàm: "Person 3 sẽ dựa vào cờ này
+để tập trung gán nhãn loại lỗi chi tiết" — phân loại ưu tiên trong nội bộ một
+video, để người gán nhãn chỉ xem kỹ vài đoạn đáng ngờ thay vì cả bài.
+
+PHÉP ĐÁNH GIÁ ĐÚNG là precision/recall của cờ so với các đoạn trong
+annotations/error_labels.csv. CHƯA LÀM ĐƯỢC vì file đó mới chỉ có header.
+
+CÁI BẪY CẦN TRÁNH KHI ĐỌC BẢNG CORRELATION: đem một công cụ đo TRONG một video
+đi tương quan GIỮA các video thì gần như luôn ra r ~ 0, và rất dễ kết luận nhầm
+thành "công cụ bị hỏng, cần hiệu chỉnh ngưỡng". Dòng flag_ratio trong
+correlation_khop_nhip.csv phải đọc theo đúng nghĩa đó.
+
+13) CAVEAT — power thống kê
+----------------------------
+Split official: n_val = 34, SE(MAE) ~ 0.45 điểm. Chênh lệch dưới ~1 điểm giữa
+các kịch bản KHÔNG phân định được trên một split -> đó là lý do có bảng CV và
+kiểm định ghép cặp ở mục 6.
+
+Bản thân bảng CV cũng chỉ có 5 fold, nên các kiểm định t có df=4 — power thấp.
+Các kết luận "KHÔNG có ý nghĩa" ở mục 6 nên đọc là "chưa đủ bằng chứng ở quy
+mô này", không phải "đã chứng minh là không có khác biệt".
+
+14) API fusion (deliverable Tuần 5)
+-----------------------------------
+   from src.temporal_dl import load_temporal_checkpoint, temporal_model
+   model, ckpt = load_temporal_checkpoint(
+       "experiments/temporal_dl/temporal_khopnhip_dtw_official.pth")
+   embedding, dtw_features = temporal_model(seq, model=model, dtw_row=row)
+
+   embedding             -> (64,)  mean (+) std trên embedding từng cửa sổ
+   dtw_features["vector"]-> (4,)   [total, seg_mean, seg_std, seg_max]
+
+dtw_features["vector"] CỐ Ý trùng khít thứ tự _dtw_row_features trong
+scripts/eval_spatial_xgb.py của Person 1, để fusion Tuần 6 concat được mà không
+cần adapter.
+
+Checkpoint khuyến nghị cho fusion: temporal_khopnhip_dtw_official.pth
+(encoder (c), 17 kênh, best epoch 27, val_mae_video_raw = 1.862 điểm).
+
+Khi fusion, GIỮ NGUYÊN cơ chế assert leakage: checkpoint mang config.train_videos
+và phải kiểm tra nó không giao với tập eval của fusion.
+
+15) Sanity check đã chạy
+-------------------------
+   S1  guard leakage nổ thật với checkpoint thiếu config.train_videos  ĐẠT
+   S2  split rời nhau, in mỗi lần chạy: key_overlap=0 person_overlap=0  ĐẠT
+   S3  không cửa sổ nào nằm cả hai phía                              ĐẠT
+   S4  guard target tự tham chiếu exit 1                             ĐẠT
+   S5  control nhãn xáo (mục 9)                                      ĐẠT
+   S6  encoder không suy biến: 6/64 chiều chết, median std 9.6e-2,
+       ||emb|| = 4.22  (ngưỡng fail là >32/64 chiều chết)            ĐẠT
+   S7  build_temporal_sequence allclose cửa sổ dataset lưu           ĐẠT
+
+   Regression test pipeline:
+   dtw_distance_total x khop_nhip @ all, n=217 -> r=-0.4419 rho=-0.3764  KHỚP
+   Baseline global-mean -> MAE 2.850 RMSE 3.787                          KHỚP
+   Baseline dance-mean  -> MAE 1.902 RMSE 2.650                          KHỚP
+
+16) Manifest artifact
+----------------------
+experiments/temporal_dl/
+   ablation_xgb_khop_nhip.csv              bảng official 183/34
+   ablation_xgb_khop_nhip_cv.csv           bảng CV (bảng chính)
+   ablation_xgb_khop_nhip_folds.csv        từng fold, để tái lập kiểm định
+   ablation_paired_tests_khop_nhip.csv     kiểm định t ghép cặp (mục 6)
+   ablation_xgb_khop_nhip_shuffled.csv     control S5
+   ablation_preds_khop_nhip.csv            kiểm tra lại mọi MAE KHÔNG cần weight
+   ablation_preds_khop_nhip_shuffled.csv
+   correlation_khop_nhip.csv               mục 7, có cột in_sample
+   temporal_embeddings_meta.csv            217 video x 64 chiều + metadata
+   temporal_embeddings_2d.csv              PCA 2D (fit trên train)
+   embeddings_sanity_khop_nhip.txt         S6
+   embeddings_sanity_khop_nhip_shuffled.txt
+   train_history_khopnhip_dtw_official.csv
+   train_history_khopnhip_nodtw_official.csv
+   train_history_khopnhip_{dtw,nodtw}_fold{0..4}.csv
+   week5_results.txt                       (file này)
+   plots/01_train_curve.png     MAE theo epoch + 2 đường baseline
+   plots/02_ablation_mae.png    bar MAE theo kịch bản
+   plots/03_dtw_vs_khopnhip.png scatter + hồi quy, annotate self-compare
+   plots/04_cv_fold.png         mean +/- std qua 5 fold
+   plots/05_embedding_pca.png   PCA 2D tô màu theo khop_nhip
+
+   *.pth (12 checkpoint) bị .gitignore loại — sinh lại bằng 2 lệnh train
+   + vòng foreach 5 fold trong HUONG-DAN-CHAY.md §8b.
+
+KHÔNG ĐỔI (kết quả train trước đó, đã trên main):
+   train_history.csv, pretrain_history.csv, temporal_best.pth
