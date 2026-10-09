@@ -3,11 +3,13 @@
 File này giải thích **cách đo** và **tại sao đo như vậy**.
 Kết quả số nằm ở `experiments/temporal_dl/week5_results.txt`.
 
-Tuần 5 của Person 2 phải giao đúng 3 thứ:
+Phạm vi: đây là phương pháp **đo của Tuần 5**, gồm đúng 3 deliverable:
 
 1. So 3 kịch bản qua một XGBoost tạm, đo MAE/RMSE — **(a) DTW-only**, **(b) LSTM-only**, **(c) DTW+LSTM** — để trả lời: *DL có học thêm được gì ngoài thông tin DTW đã có không?*
 2. Pearson/Spearman giữa `temporal_embedding` (hoặc dtw score) và cột `khop_nhip`.
 3. API `temporal_model(seq) -> embedding, dtw_features`.
+
+§0 thì rộng hơn: nó gom cả các quyết định kế thừa từ **Tuần 2–4** (geometry, cửa sổ DTW, kiến trúc BiLSTM, pretrain) để người review không phải tra chéo nhiều file. Mỗi tiểu mục có ghi tuần của nó.
 
 ---
 
@@ -16,6 +18,8 @@ Tuần 5 của Person 2 phải giao đúng 3 thứ:
 Mục này ghi lại lý do đứng sau từng quyết định kỹ thuật của nhánh Temporal, để người review không phải đoán. Mỗi tiểu mục theo cùng một khuôn: **vấn đề → chọn gì → đã loại phương án nào và vì sao**.
 
 ### 0.1 Vì sao bài toán cần *cả* DTW lẫn Deep Learning
+
+*(quyết định nền, xuyên suốt Tuần 2–5)*
 
 Đánh giá "khớp nhịp" là so một chuỗi chuyển động với một chuỗi tham chiếu mà hai chuỗi **không thẳng hàng theo thời gian**: người nhảy có thể làm đúng động tác nhưng sớm/muộn nửa nhịp, hoặc giữ đúng nhịp ở đoạn đầu rồi trôi dần.
 
@@ -28,17 +32,23 @@ Nên kiến trúc dùng DTW làm mỏ neo căn chỉnh và cấp feature, còn B
 
 ### 0.2 Vì sao geometry 8 góc khớp, không phải toạ độ pose thô
 
+*(Tuần 2 — `src/features/geometry.py`)*
+
 Toạ độ MediaPipe phụ thuộc vị trí người trong khung hình, kích thước người, và khoảng cách tới camera. Góc khớp (gối, khuỷu, vai, hông) **bất biến với cả ba** — hai người cao thấp khác nhau làm đúng cùng động tác sẽ cho cùng dãy góc.
 
 Đã loại: chuẩn hoá toạ độ theo hip + chiều cao. Nó chạy được, nhưng Person 1 đã dùng đúng cách đó cho nhánh Spatial; Person 2 lặp lại thì hai nhánh nhìn dữ liệu y hệt nhau và mất tính bổ sung khi fusion ở Tuần 6.
 
 ### 0.3 Vì sao cửa sổ 60 frame (~2 giây)
 
+*(Tuần 3 — `dtw_distance_windowed` trong `src/features/dtw.py`)*
+
 Phải đủ dài để chứa trọn một câu nhịp, đủ ngắn để còn định vị được lỗi theo thời gian. Ở 30 fps, video dài 219–690 frame cho 3–11 cửa sổ — đủ để tính `mean ⊕ std` mà không quá ít mẫu.
 
 Đã loại: cửa sổ cả bài (mất hoàn toàn định vị thời gian, và không gộp được vì độ dài khác nhau); cửa sổ 1 giây (ngắn hơn chu kỳ của phần lớn động tác, cửa sổ chủ yếu bắt nhiễu).
 
 ### 0.4 Vì sao BiLSTM 1 lớp, hidden 64, embed 32
+
+*(Tuần 4 — deliverable "model train chạy được, loss giảm")*
 
 183 video train → 1109 cửa sổ. Model hiện tại đã 47k tham số; mọi thứ to hơn là mời overfit.
 
@@ -47,6 +57,8 @@ Hai chiều (bidirectional) vì lệch nhịp nhận ra được từ **cả hai
 Đã loại: Transformer (cần dữ liệu lớn hơn hẳn mới hơn được RNN ở quy mô này); LSTM nhiều lớp (overfit ngay với 1109 cửa sổ); GRU (gần tương đương BiLSTM ở quy mô này, đổi sang cũng không làm thay đổi kết luận nên không đáng tốn một nhánh thí nghiệm).
 
 ### 0.5 Vì sao pretrain AIST++ bằng phân loại thể loại nhảy
+
+*(Tuần 3–4, bước không bắt buộc — warm-start cho cả Tuần 4 và Tuần 5)*
 
 Dataset tự quay quá nhỏ để học biểu diễn chuyển động từ đầu. AIST++ lớn nhưng **không có nhãn điểm**, nên phải dùng proxy task.
 
@@ -58,7 +70,9 @@ Chi tiết và hạn chế (cùng `window_frames=60` nhưng AIST++ đã chuẩn 
 
 ### 0.6 Vì sao phải HAI encoder riêng, không phải một encoder rồi bỏ feature ở tầng XGBoost
 
-Đây là điểm thiết kế tinh tế nhất của tuần, và bỏ qua nó thì toàn bộ bảng ablation mất giá trị.
+*(Tuần 5)*
+
+Đây là điểm thiết kế tinh tế nhất của Tuần 5, và bỏ qua nó thì toàn bộ bảng ablation mất giá trị.
 
 Kịch bản (b) theo định nghĩa là *"bỏ DTW, chỉ raw sequence"*. Cách làm dễ hơn — train **một** encoder 17 kênh rồi khi dựng feature cho (b) thì chỉ bỏ 4 cột DTW ở tầng XGBoost — **sai**, vì encoder đó đã thấy kênh DTW trong suốt quá trình train. Embedding của nó **đã hấp thụ** thông tin DTW. Bỏ cột DTW ở tầng sau không biến nó thành "LSTM-only" mà thành "LSTM-đã-biết-DTW", và so sánh (a) vs (b) trở nên vô nghĩa.
 
@@ -76,6 +90,8 @@ Thiếu (c−), (b) và (c) khác nhau **hai thứ cùng lúc** và không thể
 
 ### 0.7 Vì sao so qua một XGBoost "tạm", không so trực tiếp prediction của LSTM
 
+*(Tuần 5)*
+
 Kịch bản (a) DTW-only **không có model nào** — nó chỉ là 4 con số. Muốn so (a) với (b) và (c) một cách công bằng thì cả ba phải đi qua **cùng một bộ hồi quy**; nếu không thì ta đang so "model này với feature kia" chứ không so lượng thông tin trong feature.
 
 XGBoost đóng vai bộ hồi quy chung đó. Hyperparameter copy nguyên văn từ `scripts/eval_spatial_xgb.py` của Person 1, nên bảng của hai người so được trực tiếp với nhau.
@@ -85,6 +101,8 @@ XGBoost đóng vai bộ hồi quy chung đó. Hyperparameter copy nguyên văn t
 Chữ "tạm" là có chủ ý: XGBoost chính thức của đồ án là ở Tuần 6 trên feature fusion của cả 3 người. Ở đây nó chỉ là dụng cụ đo.
 
 ### 0.8 Vì sao GroupKFold theo `person_id`, không phải KFold thường
+
+*(Tuần 5 — protocol đo, không phải phần của model)*
 
 20 người nhảy 217 video — tức **một người nhảy nhiều bài**.
 
@@ -98,6 +116,8 @@ Nhóm theo `person_id` đảm bảo mọi video của một người nằm trọ
 
 ### 0.9 Vì sao kiểm định t ghép cặp, không nhìn hai khoảng mean ± std
 
+*(Tuần 5)*
+
 Các fold dùng **chung** tập val cho mọi setup. Fold nào khó thì **mọi** setup đều tệ, nên phương sai giữa các fold lớn và làm hầu hết các khoảng `mean ± std` phủ lên nhau — che mất khác biệt có thật.
 
 Ghép cặp khử đúng yếu tố đó: nó chỉ nhìn **hiệu** giữa hai setup trong từng fold.
@@ -107,6 +127,8 @@ Ví dụ cụ thể trong bảng này: (a) đạt 3.198 ± 0.503 còn (c) đạt
 Đã loại: t-test độc lập (bỏ qua cấu trúc ghép cặp, mất gần hết power ở n=5).
 
 ### 0.10 Vì sao báo cả Pearson lẫn Spearman
+
+*(Tuần 5 — deliverable 2)*
 
 Pearson nhạy với outlier. Trường hợp cụ thể: video `D01_P003_T01` (xem §7.2) kéo Pearson từ −0.33 lên −0.44, trong khi Spearman gần như không nhúc nhích (−0.368 vs −0.376).
 
@@ -118,7 +140,11 @@ Nên quy tắc là: báo cả hai, và khi hai con số lệch nhau nhiều thì
 
 ## 1. Hai quy tắc bắt buộc về dữ liệu
 
+*(ràng buộc lên loader của Tuần 4; cơ chế thực thi bổ sung ở Tuần 5)*
+
 Hai quy tắc dưới đây quyết định việc mọi con số đo được có ý nghĩa hay không. Cả hai đều **được chặn bằng code**, không dựa vào quy ước — vì cả hai đều rất dễ vi phạm mà không nhận ra.
+
+Chúng nằm trong `src/temporal_dl/dataset.py` và `train.py` — là file của Tuần 4 — nhưng lý do tồn tại là để bảng so sánh của Tuần 5 có nghĩa: deliverable Tuần 4 chỉ cần "loss giảm", còn Tuần 5 mới cần một con số generalization đặt cạnh baseline được.
 
 ### 1.1 Chia train/val ở cấp video, nhóm theo `person_id`
 
@@ -128,7 +154,7 @@ Thêm một tầng nữa: 20 người nhảy 217 video, nên một người xu�
 
 Nên quy tắc là: **mọi cửa sổ của một video, và mọi video của một người, phải nằm trọn một phía.**
 
-Thực thi: `split_video_indices()` chia ở cấp video; `get_temporal_loaders_grouped()` mở ra cấp cửa sổ rồi assert không cửa sổ nào nằm hai phía. Mỗi lần chạy in ra `key_overlap=0 person_overlap=0`.
+Thực thi: `split_video_indices()` chia ở cấp video; `get_temporal_loaders_grouped()` mở ra cấp cửa sổ rồi assert không cửa sổ nào nằm hai phía. Mỗi lần chạy in ra `key_overlap=0 person_overlap=0`. Cả hai hàm được **bổ sung ở Tuần 5**; `get_temporal_loaders()` cũ giữ nguyên hành vi để reproduce lại đường chạy của Tuần 4.
 
 ### 1.2 Target không được nằm trong input
 
@@ -153,12 +179,14 @@ Nên: target mặc định là `khop_nhip` từ `annotations/scores.csv`, và `t
 
 ## 2. Protocol
 
+*(Tuần 5)*
+
 | Hạng mục | Giá trị |
 |---|---|
 | Target | `khop_nhip` (0–100) |
 | Split chính | official `scores_train.csv` / `scores_test.csv` = **183 / 34** video, **16 / 4** person, rời nhau hoàn toàn |
 | Val persons | P001, P002, P016, P018 |
-| Split phụ | GroupKFold 5 fold theo `person_id` |
+| Split phụ | GroupKFold 5 fold theo `person_id` — protocol đo riêng của Tuần 5 |
 | Cửa sổ | 60 frame (~2 s ở 30 fps); hop 60 lúc train, **hop 30 lúc infer** |
 | Gộp cửa sổ → video | `mean ⊕ std` → 64 chiều |
 | Giảm chiều | StandardScaler → PCA(32), **fit chỉ trên hàng train** |

@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
 import logging
 import sys
 import time
@@ -31,7 +30,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:

@@ -304,8 +304,8 @@ class TemporalSeqDataset(Dataset):
             (window, 16) nếu use_dtw=False
     Target: giá trị cột `target_col` của video đó.
 
-    Lưu ý quan trọng (Tuần 5): dataset phát sample theo **window**, nên không
-    bao giờ được chia train/val bằng `random_split` trên dataset này — dùng
+    Lưu ý quan trọng: dataset phát sample theo **window**, nên không bao giờ
+    được chia train/val bằng `random_split` trên dataset này — dùng
     `get_temporal_loaders_grouped()` để chia ở cấp video.
     """
 
@@ -735,10 +735,11 @@ def get_temporal_loaders_grouped(
     seed: int = 42,
 ) -> Tuple[DataLoader, DataLoader, Dict[str, Any]]:
     """
-    Factory Tuần 5 — chia train/val ở **cấp video**, theo person_id.
+    Factory bổ sung ở Tuần 5 (file này là deliverable Tuần 4) — chia train/val
+    ở **cấp video**, theo person_id.
 
     Khác `get_temporal_loaders()` ở 3 điểm quyết định tính hợp lệ của mọi số đo:
-      1. Mọi window của một video nằm trọn một phía (hết leakage P1).
+      1. Mọi window của một video nằm trọn một phía, không leakage cấp cửa sổ.
       2. Train/val rời nhau theo person_id, không chỉ theo video.
       3. Target normalize bằng min/max của **tập train**.
 
