@@ -1,0 +1,26 @@
+{
+  "best_epoch": 6,
+  "best_val_macro_f1": 0.876969696969697,
+  "best_val_loss": 0.027231244357247136,
+  "error_types": [
+    "off_beat",
+    "wrong_move",
+    "low_amplitude",
+    "wrong_direction",
+    "missed_move"
+  ],
+  "per_class_f1": {
+    "off_beat": 0.8666666666666666,
+    "wrong_move": 0.8666666666666666,
+    "low_amplitude": 1.0,
+    "wrong_direction": 0.8333333333333333,
+    "missed_move": 0.8181818181818181
+  },
+  "n_train": 2070,
+  "n_val": 569,
+  "n_windows": 2639,
+  "synthetic": true,
+  "encoder": "cnn",
+  "window_frames": 32,
+  "embed_size": 64
+}
