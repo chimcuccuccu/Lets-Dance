@@ -58,13 +58,13 @@ Hai chiều (bidirectional) vì lệch nhịp nhận ra được từ **cả hai
 
 ### 0.5 Vì sao pretrain AIST++ bằng phân loại thể loại nhảy
 
-*(Tuần 3–4, bước không bắt buộc — warm-start cho cả Tuần 4 và Tuần 5)*
+*(Tuần 3–4, bước không bắt buộc — làm điểm khởi đầu cho cả Tuần 4 và Tuần 5)*
 
-Dataset tự quay quá nhỏ để học biểu diễn chuyển động từ đầu. AIST++ lớn nhưng **không có nhãn điểm**, nên phải dùng proxy task.
+Dataset tự quay quá nhỏ để học biểu diễn chuyển động từ đầu. AIST++ lớn nhưng **không có nhãn điểm**, nên phải dùng một bài toán thay thế (proxy task).
 
-Phân loại genre buộc backbone phải phân biệt Breaking với Waacking — tức phải mã hoá được nhịp độ và phong cách chuyển động, đúng thứ cần cho bài toán nhịp.
+Phân loại thể loại buộc mạng nền phải phân biệt Breaking với Waacking — tức phải mã hoá được nhịp độ và phong cách chuyển động, đúng thứ cần cho bài toán nhịp.
 
-Đã loại: next-frame prediction. Model sẽ học nội suy mượt giữa hai frame liền kề — một kỹ năng gần như vô dụng cho việc đánh giá nhịp, và dễ đạt loss thấp mà không học được gì hữu ích.
+Đã loại: dự đoán khung hình kế tiếp. Model sẽ học nội suy mượt giữa hai frame liền kề — một kỹ năng gần như vô dụng cho việc đánh giá nhịp, và dễ đạt loss thấp mà không học được gì hữu ích.
 
 Chi tiết và hạn chế (cùng `window_frames=60` nhưng AIST++ đã chuẩn hoá về 360 frame nên không ứng với cùng khoảng thời gian) ở `docs/temporal_pretrain.md`.
 
@@ -100,17 +100,39 @@ XGBoost đóng vai bộ hồi quy chung đó. Hyperparameter copy nguyên văn t
 
 Chữ "tạm" là có chủ ý: XGBoost chính thức của đồ án là ở Tuần 6 trên feature fusion của cả 3 người. Ở đây nó chỉ là dụng cụ đo.
 
-### 0.8 Vì sao GroupKFold theo `person_id`, không phải KFold thường
+### 0.8 Vì sao phải chia nhiều lần, và vì sao chia theo `person_id`
 
-*(Tuần 5 — protocol đo, không phải phần của model)*
+*(Tuần 5 — cách đo, không phải phần của model)*
+
+Hai câu hỏi tách rời nhau: **(a)** vì sao phải chia train/val nhiều lần thay vì một lần, **(b)** nếu chia nhiều lần thì chia theo cái gì.
+
+#### (a) Vì sao chia 5 lần, không chỉ dùng cách chia chính thức
+
+Cách chia chính thức 183/34 vẫn giữ — đó là cách chia chung của đồ án và Person 1 cũng báo trên đó, nên hai bảng so sánh được với nhau. Nhưng nó **không đủ** cho câu hỏi của Tuần 5.
+
+Lý do: Tuần 4 hỏi *"model có học được không"* — chia một lần là đủ, chỉ cần loss giảm. Tuần 5 hỏi *"kịch bản này có hơn kịch bản kia không"*, mà khoảng cách cần đo chỉ 0.2–0.9 điểm, trong khi tập val 34 video cho sai số chuẩn của MAE khoảng **±0.45 điểm** (§5). Tức thứ cần đo cùng cỡ với nhiễu. Chia một lần cho **một** con số, không có cách nào biết khoảng cách 0.2 điểm là thật hay là may.
+
+Chia 5 lần rồi lấy trung bình giải quyết đúng ba thứ đó:
+
+1. **5 con số thay vì 1** → thấy được độ phân tán, nên biết khoảng cách nào nằm trong nhiễu.
+2. **Kiểm định thống kê trở nên khả thi** — phải có nhiều cặp số mới tính được mức ý nghĩa (§0.9). Chia một lần thì không có gì để kiểm định.
+3. **Cả 217 video đều được chấm đúng một lượt**, thay vì chỉ 34 video cố định. Ước lượng dùng hết dữ liệu.
+
+Bằng chứng việc này không phải lý thuyết: với cách chia chính thức, `(c)+dance` đạt **1.741**, thấp hơn mốc trung bình theo bài 1.902 — nhìn như đã thắng. Nhưng bảng 5 lần chia cho thấy việc thêm cột đánh dấu bài thực ra làm **tệ đi** (2.401 so với 2.306, mức ý nghĩa 0.24). Tương tự `(a+) DTW-only extended` đạt 1.917 khi chia một lần nhưng 2.891 khi chia 5 lần (§7.5). Chỉ dùng cách chia chính thức thì đã kết luận sai **hai lần**.
+
+**Vì sao đúng 5 lần:** chỉ có 20 người, nên chia 5 lần thì mỗi lần giữ lại **đúng 4 người** để làm val — cùng số người với cách chia chính thức (P001, P002, P016, P018), nên mỗi lần đo đúng cùng một loại khả năng tổng quát ở cùng độ mịn. (Số *video* thì không bằng: mỗi lần được 37–48 video tuỳ người nhảy nhiều hay ít bài, so với 34 của cách chia chính thức.) Chia 10 lần thì mỗi lần còn 2 người, MAE từng lần quá nhiễu; chia tới mức mỗi lần chỉ giữ một người thì phải train 20 × 2 encoder = 40 lượt, mà val một người thì phương sai bung ra.
+
+Đã loại: chia ngẫu nhiên lặp lại nhiều lần trên cùng tập val chính thức (vẫn đúng 34 video đó, không thêm thông tin độc lập nào); mở rộng tập val bằng cách lấy thêm từ train (183 video train vốn đã ít).
+
+#### (b) Vì sao nhóm theo `person_id`, không chia ngẫu nhiên
 
 20 người nhảy 217 video — tức **một người nhảy nhiều bài**.
 
-KFold ngẫu nhiên sẽ để cùng một người xuất hiện ở cả train lẫn val. Khi đó model có thể học "người P007 nhảy kiểu này, thường được chấm khoảng 74 điểm" và ăn điểm trên val mà không hề học cách **đánh giá** chuyển động. MAE sẽ đẹp lên một cách giả tạo.
+Chia ngẫu nhiên sẽ để cùng một người xuất hiện ở cả train lẫn val. Khi đó model có thể học "người P007 nhảy kiểu này, thường được chấm khoảng 74 điểm" và ăn điểm trên val mà không hề học cách **đánh giá** chuyển động. MAE sẽ đẹp lên một cách giả tạo.
 
-Nhóm theo `person_id` đảm bảo mọi video của một người nằm trọn một phía, nên con số đo được là khả năng tổng quát hoá sang **người chưa từng thấy** — đúng tình huống khi triển khai thật.
+Nhóm theo `person_id` đảm bảo mọi video của một người nằm trọn một phía, nên con số đo được là khả năng chấm đúng cho **người chưa từng thấy** — đúng tình huống khi triển khai thật.
 
-Đã loại: KFold thường (leakage như trên); nhóm theo `dance_id` (chỉ 12 bài nên mỗi fold quá to, và nó trả lời câu hỏi khác — "tổng quát sang *bài* mới", vốn là thí nghiệm held-out-dance của Tuần 6).
+Đã loại: chia ngẫu nhiên (rò rỉ thông tin như trên); nhóm theo `dance_id` (chỉ 12 bài nên mỗi phần quá to, và nó trả lời câu hỏi khác — "chấm đúng cho *bài* mới", là thí nghiệm giữ riêng cả bài của Tuần 6).
 
 Đây là cùng một cạm bẫy với việc chia ở cấp cửa sổ (§1.1), chỉ ở một tầng khác: ở đó là cửa sổ cùng video nằm hai phía, ở đây là video cùng người nằm hai phía.
 
@@ -130,11 +152,11 @@ Ví dụ cụ thể trong bảng này: (a) đạt 3.198 ± 0.503 còn (c) đạt
 
 *(Tuần 5 — deliverable 2)*
 
-Pearson nhạy với outlier. Trường hợp cụ thể: video `D01_P003_T01` (xem §7.2) kéo Pearson từ −0.33 lên −0.44, trong khi Spearman gần như không nhúc nhích (−0.368 vs −0.376).
+Pearson nhạy với điểm ngoại lai (outlier). Trường hợp cụ thể: video `D01_P003_T01` (xem §7.2) kéo Pearson từ −0.33 lên −0.44, trong khi Spearman gần như không nhúc nhích (−0.368 vs −0.376).
 
 Spearman đo **thứ hạng**, hợp với mục tiêu cuối cùng là xếp hạng người nhảy chứ không phải dự đoán đúng con số tuyệt đối.
 
-Nên quy tắc là: báo cả hai, và khi hai con số lệch nhau nhiều thì coi đó là **tín hiệu có outlier cần đi tìm**, không phải cơ hội chọn con số đẹp hơn.
+Nên quy tắc là: báo cả hai, và khi hai con số lệch nhau nhiều thì coi đó là **tín hiệu có điểm ngoại lai cần đi tìm**, không phải cơ hội chọn con số đẹp hơn.
 
 ---
 
@@ -232,7 +254,7 @@ Hệ quả, đo trên split official 183/34:
 
 **Mọi con số MAE trong bảng Tuần 5 là vô nghĩa nếu không đặt cạnh hai dòng này.** Một mô hình đạt MAE 2.6 nghe có vẻ tốt trên thang 0–100, nhưng nó còn thua dự đoán "trung bình của bài này".
 
-Đó cũng là lý do bảng có khối `+dance` (one-hot `dance_id`): nếu không có, mọi kịch bản chủ yếu đang suy ra *"đây là bài nào"* và câu hỏi cần trả lời bị lấp. Có one-hot thì bảng đo **xếp hạng người nhảy trong cùng một bài** — câu hỏi deployable, và là chỗ DTW-vs-LSTM mới phân định được.
+Đó cũng là lý do bảng có khối `+dance` (one-hot `dance_id`): nếu không có, mọi kịch bản chủ yếu đang suy ra *"đây là bài nào"* và câu hỏi cần trả lời bị lấp. Có one-hot thì bảng đo **xếp hạng người nhảy trong cùng một bài** — câu hỏi dùng được thật, và là chỗ DTW-vs-LSTM mới phân định được.
 
 ---
 
@@ -274,7 +296,7 @@ Các sanity check được cài sẵn trong code:
 | S2 | Split rời nhau | in và assert mỗi lần chạy: `key_overlap=0 person_overlap=0` |
 | S3 | Không cửa sổ nào ở cả hai phía | assert trong `get_temporal_loaders_grouped` |
 | S4 | Guard target tự tham chiếu | `--target-col dtw_distance_total` không kèm `--allow-dtw-target` → exit 1 |
-| S5 | Control nhãn xáo | `--shuffle-labels` → mọi kịch bản phải tụt về ≈2.85 và \|r\|≈0 |
+| S5 | Đối chứng nhãn xáo | `--shuffle-labels` → mọi kịch bản phải tụt về ≈2.85 và \|r\|≈0 |
 | S6 | Encoder suy biến | `embeddings_sanity_*.txt`: >50% chiều có std < 1e-6 ⇒ ReLU cuối đã chết |
 | S7 | Không lệch train/infer | `build_temporal_sequence()` phải `allclose` với cửa sổ đầu dataset lưu |
 
